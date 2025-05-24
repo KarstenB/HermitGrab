@@ -17,6 +17,9 @@ pub use crate::hermitgrab_error::AtomicLinkError;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Increase output verbosity
+    #[arg(short, long, global = true)]
+    verbose: bool,
 }
 
 #[derive(Subcommand)]
@@ -88,7 +91,7 @@ fn main() -> Result<()> {
             crate::cmd_init::run(repo)?;
         }
         Commands::Apply => {
-            crate::cmd_apply::run()?;
+            crate::cmd_apply::run_with_dir(None, cli.verbose)?;
         }
         Commands::Status => {
             println!("[hermitgrab] Status:");
