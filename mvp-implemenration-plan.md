@@ -80,5 +80,6 @@ Here is an implementation plan for "HermitGrab" focused on a Minimum Viable Prod
   - Clone a dotfiles repo from GitHub.
   - Install (or prompt to install) fish and starship.
   - Link/copy fish and starship config files to the correct locations.
+- A unit test shows that files are correctly linked
 - All actions are logged to the terminal.
 - No TUI or advanced tagging/detector logic required for MVP.

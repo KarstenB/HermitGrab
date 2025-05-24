@@ -1,0 +1,1 @@
+/Users/kb/code/HermitGrab/fake_home/.hermitgrab/fish/config.fish
