@@ -1,0 +1,16 @@
+tags:
+  - starship
+
+files:
+  - source: starship/starship.toml
+    target: ~/.config/starship.toml
+    link: soft
+install:
+  - name: starship
+    check_cmd: starship --version
+    source: cargo_binstall
+    version: latest
+depends:
+  - utils/starship
+sources:
+  cargo_binstall: echo cargo binstall -y {{ name }}

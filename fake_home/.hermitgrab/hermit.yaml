@@ -7,10 +7,7 @@ files:
     link: soft
     tags:
       - config
-      - ~windows # Not for windows
-  - source: starship/starship.toml
-    target: ~/.config/starship.toml
-    link: soft
+      - -windows # Not for windows
 install:
   - name: fish
     check_cmd: false

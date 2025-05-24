@@ -10,7 +10,6 @@ pub mod atomic_link;
 pub mod hermitgrab_error;
 
 pub use crate::action::{Action, AtomicLinkAction, InstallAction};
-pub use crate::cmd_apply::run as apply_command;
 pub use crate::cmd_init::run as init_command;
 pub use crate::hermitgrab_error::AtomicLinkError;
 pub use std::collections::HashSet;

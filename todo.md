@@ -1,0 +1,6 @@
+- [ ] Create smart-patching
+- [ ] Support nushell in install_cmd?
+- [ ] Support multi-line execution in install_cmd when shebang is detected
+- [ ] Create detectors
+- [ ] Properly use tags
+- [ ] Treat highest level config special by promoting the sources
