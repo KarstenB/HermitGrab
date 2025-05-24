@@ -4,12 +4,16 @@ use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
+pub mod action;
 pub mod atomic_link;
 pub mod hermitgrab_error;
 
+pub use crate::action::{Action, AtomicLinkAction, InstallAction};
 pub use crate::cmd_apply::run as apply_command;
 pub use crate::cmd_init::run as init_command;
 pub use crate::hermitgrab_error::AtomicLinkError;
+pub use std::collections::HashSet;
+pub use std::sync::Arc;
 
 #[derive(Parser)]
 #[command(name = "hermitgrab")]
@@ -37,27 +41,11 @@ enum Commands {
 
 #[derive(Debug, Deserialize)]
 pub struct HermitConfig {
+    pub tags: Option<Vec<String>>,
     pub files: Vec<DotfileEntry>,
     pub install: Option<Vec<InstallEntry>>,
     pub sources: Option<HashMap<String, String>>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct InstallEntry(pub HashMap<String, String>);
-
-impl InstallEntry {
-    pub fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).map(|s| s.as_str())
-    }
-    pub fn name(&self) -> Option<&str> {
-        self.get("name")
-    }
-    pub fn check_cmd(&self) -> Option<&str> {
-        self.get("check_cmd")
-    }
-    pub fn source(&self) -> Option<&str> {
-        self.get("source")
-    }
+    pub depends: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +61,40 @@ pub struct DotfileEntry {
     pub source: String,
     pub target: String,
     pub link: LinkType,
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct InstallEntry {
+    pub name: String,
+    pub check_cmd: Option<String>,
+    pub source: Option<String>,
+    pub version: Option<String>,
+    pub tags: Option<Vec<String>>,
+}
+
+impl InstallEntry {
+    pub fn get(&self, key: &str) -> Option<&str> {
+        match key {
+            "name" => Some(self.name.as_str()),
+            "check_cmd" => self.check_cmd.as_deref(),
+            "source" => self.source.as_deref(),
+            "version" => self.version.as_deref(),
+            _ => None,
+        }
+    }
+    pub fn name(&self) -> Option<&str> {
+        Some(self.name.as_str())
+    }
+    pub fn check_cmd(&self) -> Option<&str> {
+        self.check_cmd.as_deref()
+    }
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+    pub fn tags(&self) -> Option<&Vec<String>> {
+        self.tags.as_ref()
+    }
 }
 
 pub fn load_hermit_config(path: &str) -> anyhow::Result<HermitConfig> {
@@ -91,7 +113,121 @@ fn main() -> Result<()> {
             crate::cmd_init::run(repo)?;
         }
         Commands::Apply => {
-            crate::cmd_apply::run_with_dir(None, cli.verbose)?;
+            // 1. Find all hermit.yaml files
+            let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
+            let search_root = user_dirs.home_dir().join(".hermitgrab");
+            let yaml_files = crate::cmd_apply::find_hermit_yaml_files(&search_root);
+            // 2. Parse all configs
+            let mut configs = Vec::new();
+            for path in &yaml_files {
+                match load_hermit_config(path.to_str().unwrap()) {
+                    Ok(cfg) => configs.push((path.clone(), cfg)),
+                    Err(e) => eprintln!("[hermitgrab] Error loading {}: {}", path.display(), e),
+                }
+            }
+            // 3. Build actions
+            let mut actions: Vec<Arc<dyn Action>> = Vec::new();
+            for (path, cfg) in &configs {
+                let config_tags = cfg.tags.clone().unwrap_or_default();
+                let depends = cfg.depends.clone().unwrap_or_default();
+                for file in &cfg.files {
+                    let mut tags = config_tags.clone();
+                    if let Some(ftags) = &file.tags {
+                        tags.extend(ftags.clone());
+                    }
+                    let id = format!("link:{}:{}", path.display(), file.target);
+                    actions.push(Arc::new(AtomicLinkAction {
+                        id,
+                        src: path
+                            .parent()
+                            .unwrap()
+                            .join(&file.source)
+                            .display()
+                            .to_string(),
+                        dst: file.target.clone(),
+                        tags,
+                        depends: depends.clone(),
+                    }));
+                }
+                if let Some(installs) = &cfg.install {
+                    for inst in installs {
+                        let mut tags = config_tags.clone();
+                        if let Some(itags) = inst.tags() {
+                            tags.extend(itags.iter().cloned());
+                        }
+                        let id = format!("install:{}:{}", path.display(), inst.name);
+                        actions.push(Arc::new(InstallAction {
+                            id,
+                            name: inst.name.clone(),
+                            tags,
+                            depends: depends.clone(),
+                            check_cmd: inst.check_cmd.clone(),
+                            source: inst.source.clone(),
+                            version: inst.version.clone(),
+                            sources_map: cfg.sources.clone(),
+                        }));
+                    }
+                }
+            }
+            // 4. Topo sort actions by dependencies (simple, by id)
+            let mut sorted = Vec::new();
+            let mut seen = HashSet::new();
+            fn visit(
+                a: &Arc<dyn Action>,
+                actions: &Vec<Arc<dyn Action>>,
+                seen: &mut HashSet<String>,
+                sorted: &mut Vec<Arc<dyn Action>>,
+            ) {
+                if seen.contains(&a.id()) {
+                    return;
+                }
+                for dep in a.dependencies() {
+                    if let Some(dep_a) = actions.iter().find(|x| &x.id() == dep) {
+                        visit(dep_a, actions, seen, sorted);
+                    }
+                }
+                seen.insert(a.id());
+                sorted.push(a.clone());
+            }
+            for a in &actions {
+                visit(a, &actions, &mut seen, &mut sorted);
+            }
+            // 5. Print plan
+            println!("[hermitgrab] Execution plan:");
+            for (i, a) in sorted.iter().enumerate() {
+                println!(
+                    "{}. {} [tags: {:?}]",
+                    i + 1,
+                    a.short_description(),
+                    a.tags()
+                );
+            }
+            // 6. Confirm
+            use std::io::{self, Write};
+            if !cli.verbose {
+                print!("Proceed? [y/N]: ");
+                io::stdout().flush().unwrap();
+                let mut input = String::new();
+                io::stdin().read_line(&mut input).unwrap();
+                if !matches!(input.trim(), "y" | "Y") {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+            }
+            // 7. Execute plan (sequential for now)
+            let mut results = Vec::new();
+            for a in &sorted {
+                let res = a.execute();
+                results.push((a.short_description(), res));
+            }
+            // 8. Summary
+            println!("[hermitgrab] Summary:");
+            for (desc, res) in &results {
+                match res {
+                    Ok(_) => println!("[ok] {}", desc),
+                    Err(e) => println!("[err] {}: {}", desc, e),
+                }
+            }
         }
         Commands::Status => {
             println!("[hermitgrab] Status:");

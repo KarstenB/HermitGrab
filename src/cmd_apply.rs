@@ -31,20 +31,18 @@ fn info_prefix() -> String {
     colorize("[hermitgrab]", "light_blue")
 }
 
-fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
+pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
-    if root.is_file() && root.file_name().map_or(false, |f| f == "hermit.yaml") {
+    if root.is_file() && root.file_name().is_some_and(|f| f == "hermit.yaml") {
         result.push(root.to_path_buf());
     } else if root.is_dir() {
         if let Ok(entries) = fs::read_dir(root) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        result.extend(find_hermit_yaml_files(&path));
-                    } else if path.file_name().map_or(false, |f| f == "hermit.yaml") {
-                        result.push(path);
-                    }
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    result.extend(find_hermit_yaml_files(&path));
+                } else if path.file_name().is_some_and(|f| f == "hermit.yaml") {
+                    result.push(path);
                 }
             }
         }
@@ -63,18 +61,31 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
     };
     let yaml_files = find_hermit_yaml_files(&search_root);
     if yaml_files.is_empty() {
-        eprintln!("{} No hermit.yaml files found in {}", info_prefix(), search_root.display());
+        eprintln!(
+            "{} No hermit.yaml files found in {}",
+            info_prefix(),
+            search_root.display()
+        );
         return Ok(());
     }
     let hermitgrab_root = search_root.canonicalize().unwrap_or(search_root.clone());
     let mut total_errors = 0;
     for config_path in yaml_files {
-        let rel_path = config_path.strip_prefix(&hermitgrab_root).unwrap_or(&config_path);
-        println!("{} Processing config: {}", info_prefix(), rel_path.display());
+        let rel_path = config_path
+            .strip_prefix(&hermitgrab_root)
+            .unwrap_or(&config_path);
+        println!(
+            "{} Processing config: {}",
+            info_prefix(),
+            rel_path.display()
+        );
         let config = match crate::load_hermit_config(config_path.to_str().unwrap()) {
             Ok(cfg) => cfg,
             Err(_) => {
-                eprintln!("[hermitgrab] Error loading {}: (could not parse or read)", rel_path.display());
+                eprintln!(
+                    "[hermitgrab] Error loading {}: (could not parse or read)",
+                    rel_path.display()
+                );
                 total_errors += 1;
                 continue;
             }
@@ -91,10 +102,15 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                     if let Err(e) = std::fs::create_dir_all(parent) {
                         let msg = format!(
                             "[hermitgrab] Error creating directory {} for target {} (from {}): {}",
-                            parent.display(), dst.display(), config_path.display(), e
+                            parent.display(),
+                            dst.display(),
+                            config_path.display(),
+                            e
                         );
                         let colored = colorize(&msg, "red");
-                        if verbose { eprintln!("{}", colored); }
+                        if verbose {
+                            eprintln!("{}", colored);
+                        }
                         errors.push(colored);
                         continue;
                     }
@@ -103,52 +119,89 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
             if verbose {
                 println!(
                     "{} {} -> {} ({:?})",
-                    info_prefix(), src.display(), entry.target, entry.link
+                    info_prefix(),
+                    src.display(),
+                    entry.target,
+                    entry.link
                 );
             }
             match entry.link {
-                LinkType::Soft => {
-                    match crate::atomic_link::atomic_symlink(&src, dst) {
-                        Ok(_) => if verbose {
-                            println!("{} Symlinked {} -> {}", info_prefix(), src.display(), dst.display());
-                        },
-                        Err(e) => {
-                            let msg = format!(
-                                "[hermitgrab] Error creating symlink for {} -> {} (from {}): {}",
-                                src.display(), entry.target, config_path.display(), e
+                LinkType::Soft => match crate::atomic_link::atomic_symlink(&src, dst) {
+                    Ok(_) => {
+                        if verbose {
+                            println!(
+                                "{} Symlinked {} -> {}",
+                                info_prefix(),
+                                src.display(),
+                                dst.display()
                             );
-                            let colored = colorize(&msg, "red");
-                            if verbose { eprintln!("{}", colored); }
-                            errors.push(colored);
-                            continue;
                         }
                     }
-                }
+                    Err(e) => {
+                        let msg = format!(
+                            "[hermitgrab] Error creating symlink for {} -> {} (from {}): {}",
+                            src.display(),
+                            entry.target,
+                            config_path.display(),
+                            e
+                        );
+                        let colored = colorize(&msg, "red");
+                        if verbose {
+                            eprintln!("{}", colored);
+                        }
+                        errors.push(colored);
+                        continue;
+                    }
+                },
                 LinkType::Copy => {
                     if let Err(e) = std::fs::copy(&src, dst) {
                         let msg = format!(
                             "[hermitgrab] Error copying {} -> {} (from {}): {}",
-                            src.display(), entry.target, config_path.display(), e
+                            src.display(),
+                            entry.target,
+                            config_path.display(),
+                            e
                         );
                         let colored = colorize(&msg, "red");
-                        if verbose { eprintln!("{}", colored); }
+                        if verbose {
+                            eprintln!("{}", colored);
+                        }
                         errors.push(colored);
                         continue;
                     }
-                    if verbose { println!("{} Copied {} -> {}", info_prefix(), src.display(), dst.display()); }
+                    if verbose {
+                        println!(
+                            "{} Copied {} -> {}",
+                            info_prefix(),
+                            src.display(),
+                            dst.display()
+                        );
+                    }
                 }
                 LinkType::Hard => {
                     if let Err(e) = std::fs::hard_link(&src, dst) {
                         let msg = format!(
                             "[hermitgrab] Error hard linking {} -> {} (from {}): {}",
-                            src.display(), entry.target, config_path.display(), e
+                            src.display(),
+                            entry.target,
+                            config_path.display(),
+                            e
                         );
                         let colored = colorize(&msg, "red");
-                        if verbose { eprintln!("{}", colored); }
+                        if verbose {
+                            eprintln!("{}", colored);
+                        }
                         errors.push(colored);
                         continue;
                     }
-                    if verbose { println!("{} Hard linked {} -> {}", info_prefix(), src.display(), dst.display()); }
+                    if verbose {
+                        println!(
+                            "{} Hard linked {} -> {}",
+                            info_prefix(),
+                            src.display(),
+                            dst.display()
+                        );
+                    }
                 }
             }
         }
@@ -168,17 +221,31 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                             if output.status.success() {
                                 let msg = format!(
                                     "{} {} already installed (check: '{}')",
-                                    info_prefix(), name, check_cmd
+                                    info_prefix(),
+                                    name,
+                                    check_cmd
                                 );
                                 println!("{}", colorize(&msg, "yellow"));
                                 if verbose {
                                     let stdout = String::from_utf8_lossy(&output.stdout);
                                     let stderr = String::from_utf8_lossy(&output.stderr);
                                     if !stdout.trim().is_empty() {
-                                        println!("{}", colorize(&format!("[check_cmd stdout] {}", stdout.trim()), "light_gray"));
+                                        println!(
+                                            "{}",
+                                            colorize(
+                                                &format!("[check_cmd stdout] {}", stdout.trim()),
+                                                "light_gray"
+                                            )
+                                        );
                                     }
                                     if !stderr.trim().is_empty() {
-                                        println!("{}", colorize(&format!("[check_cmd stderr] {}", stderr.trim()), "light_gray"));
+                                        println!(
+                                            "{}",
+                                            colorize(
+                                                &format!("[check_cmd stderr] {}", stderr.trim()),
+                                                "light_gray"
+                                            )
+                                        );
                                     }
                                 }
                                 continue;
@@ -187,7 +254,7 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                     }
                     if let Some(template) = sources.get(source) {
                         let cmd = reg
-                            .render_template(template, &entry.0)
+                            .render_template(template, &entry.check_cmd)
                             .unwrap_or_else(|_| template.clone());
                         println!(
                             "[hermitgrab] Installing {} using '{}': {}",
@@ -217,7 +284,15 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
             }
         }
         if !errors.is_empty() {
-            let summary = colorize(&format!("{} {} error(s) occurred in {}. Use --verbose for details.", info_prefix(), errors.len(), rel_path.display()), "red");
+            let summary = colorize(
+                &format!(
+                    "{} {} error(s) occurred in {}. Use --verbose for details.",
+                    info_prefix(),
+                    errors.len(),
+                    rel_path.display()
+                ),
+                "red",
+            );
             eprintln!("{}", summary);
             if verbose {
                 for err in &errors {
@@ -226,11 +301,19 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
             }
             total_errors += errors.len();
         } else {
-            println!("{} All operations completed successfully for {}.", info_prefix(), rel_path.display());
+            println!(
+                "{} All operations completed successfully for {}.",
+                info_prefix(),
+                rel_path.display()
+            );
         }
     }
     if total_errors > 0 {
-        eprintln!("{} Total errors across all configs: {}", info_prefix(), total_errors);
+        eprintln!(
+            "{} Total errors across all configs: {}",
+            info_prefix(),
+            total_errors
+        );
     }
     Ok(())
 }

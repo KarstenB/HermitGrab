@@ -1,6 +1,12 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+pub enum HermitGrabError {
+    #[error(transparent)]
+    AtomicLinkError(#[from] AtomicLinkError),
+}
+
+#[derive(Debug, Error)]
 pub enum AtomicLinkError {
     #[error("Source does not exist: {0}")]
     SourceNotFound(String),

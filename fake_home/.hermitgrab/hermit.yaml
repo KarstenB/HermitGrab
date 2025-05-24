@@ -1,7 +1,13 @@
+tags:
+  - fish
+
 files:
   - source: fish/config.fish
     target: ~/.config/fish/config.fish
     link: soft
+    tags:
+      - config
+      - ~windows # Not for windows
   - source: starship/starship.toml
     target: ~/.config/starship.toml
     link: soft
@@ -10,9 +16,16 @@ install:
     check_cmd: fish --version
     source: apt
     version: latest
-  - name: starship
-    check_cmd: starship --version
-    source: brew
+    tags:
+      - fish-latest
+  - name: fish
+    check_cmd: fish --version
+    source: apt
+    version: 4.0
+    tags:
+      - fish-4.0
+depends:
+  - utils/starship
 sources:
   apt: apt-get install -y {{ name }}
   brew: brew install {{ name }}
