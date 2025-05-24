@@ -205,79 +205,79 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                 }
             }
         }
-                let reg = Handlebars::new();
-                for entry in config.install {
-                    let name = entry.name;
-                    let check_cmd = entry.check_cmd.as_deref().unwrap_or("");
-                    let source = entry.source.as_deref().unwrap_or("");
-                    if !check_cmd.is_empty() {
-                        let status = std::process::Command::new("sh")
-                            .arg("-c")
-                            .arg(check_cmd)
-                            .output();
-                        if let Ok(output) = status {
-                            if output.status.success() {
-                                let msg = format!(
-                                    "{} {} already installed (check: '{}')",
-                                    info_prefix(),
-                                    name,
-                                    check_cmd
-                                );
-                                println!("{}", colorize(&msg, "yellow"));
-                                if verbose {
-                                    let stdout = String::from_utf8_lossy(&output.stdout);
-                                    let stderr = String::from_utf8_lossy(&output.stderr);
-                                    if !stdout.trim().is_empty() {
-                                        println!(
-                                            "{}",
-                                            colorize(
-                                                &format!("[check_cmd stdout] {}", stdout.trim()),
-                                                "light_gray"
-                                            )
-                                        );
-                                    }
-                                    if !stderr.trim().is_empty() {
-                                        println!(
-                                            "{}",
-                                            colorize(
-                                                &format!("[check_cmd stderr] {}", stderr.trim()),
-                                                "light_gray"
-                                            )
-                                        );
-                                    }
-                                }
-                                continue;
-                            }
-                        }
-                    }
-                    if let Some(template) = config.sources.get(source) {
-                        let cmd = reg
-                            .render_template(template, &entry.check_cmd)
-                            .unwrap_or_else(|_| template.clone());
-                        println!(
-                            "[hermitgrab] Installing {} using '{}': {}",
-                            name, source, cmd
+        let reg = Handlebars::new();
+        for entry in config.install {
+            let name = entry.name;
+            let check_cmd = entry.check_cmd.as_deref().unwrap_or("");
+            let source = entry.source.as_deref().unwrap_or("");
+            if !check_cmd.is_empty() {
+                let status = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(check_cmd)
+                    .output();
+                if let Ok(output) = status {
+                    if output.status.success() {
+                        let msg = format!(
+                            "{} {} already installed (check: '{}')",
+                            info_prefix(),
+                            name,
+                            check_cmd
                         );
-                        let status = std::process::Command::new("sh")
-                            .arg("-c")
-                            .arg(&cmd)
-                            .status();
-                        if let Ok(status) = status {
-                            if status.success() {
-                                println!("[hermitgrab] Successfully installed {}", name);
-                            } else {
+                        println!("{}", colorize(&msg, "yellow"));
+                        if verbose {
+                            let stdout = String::from_utf8_lossy(&output.stdout);
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            if !stdout.trim().is_empty() {
                                 println!(
-                                    "[hermitgrab] Failed to install {} (exit code: {:?})",
-                                    name,
-                                    status.code()
+                                    "{}",
+                                    colorize(
+                                        &format!("[check_cmd stdout] {}", stdout.trim()),
+                                        "light_gray"
+                                    )
                                 );
                             }
-                        } else {
-                            println!("[hermitgrab] Failed to run install command for {}", name);
+                            if !stderr.trim().is_empty() {
+                                println!(
+                                    "{}",
+                                    colorize(
+                                        &format!("[check_cmd stderr] {}", stderr.trim()),
+                                        "light_gray"
+                                    )
+                                );
+                            }
                         }
-                    } else {
-                        println!("[hermitgrab] Unknown source: {} for {}", source, name);
+                        continue;
                     }
+                }
+            }
+            if let Some(template) = config.sources.get(source) {
+                let cmd = reg
+                    .render_template(template, &entry.check_cmd)
+                    .unwrap_or_else(|_| template.clone());
+                println!(
+                    "[hermitgrab] Installing {} using '{}': {}",
+                    name, source, cmd
+                );
+                let status = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&cmd)
+                    .status();
+                if let Ok(status) = status {
+                    if status.success() {
+                        println!("[hermitgrab] Successfully installed {}", name);
+                    } else {
+                        println!(
+                            "[hermitgrab] Failed to install {} (exit code: {:?})",
+                            name,
+                            status.code()
+                        );
+                    }
+                } else {
+                    println!("[hermitgrab] Failed to run install command for {}", name);
+                }
+            } else {
+                println!("[hermitgrab] Unknown source: {} for {}", source, name);
+            }
         }
         if !errors.is_empty() {
             let summary = colorize(

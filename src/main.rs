@@ -180,9 +180,7 @@ fn main() -> Result<()> {
                         tags.extend(itags.iter().cloned());
                     }
                     let id = format!("install:{}:{}", path.display(), inst.name);
-                    let install_cmd = cfg
-                        .sources
-                        .get(&inst.name);
+                    let install_cmd = cfg.sources.get(&inst.name);
                     let Some(install_cmd) = install_cmd else {
                         eprintln!("[hermitgrab] No source found for install: {}", inst.name);
                         continue;
