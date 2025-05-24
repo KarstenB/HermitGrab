@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use serde_derive::Deserialize;
+use serde::Deserialize;
+use serde::Deserializer;
 use std::collections::HashMap;
 use std::fs;
 
@@ -39,13 +40,48 @@ enum Commands {
     Status,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Tag {
+    Positive(String),
+    Negative(String),
+}
+
+impl<'de> Deserialize<'de> for Tag {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let trimmed = s.trim();
+        if let Some(rest) = trimmed.strip_prefix('+') {
+            Ok(Tag::Positive(rest.to_string()))
+        } else if let Some(rest) = trimmed.strip_prefix('-') {
+            Ok(Tag::Negative(rest.to_string()))
+        } else if let Some(rest) = trimmed.strip_prefix('~') {
+            Ok(Tag::Negative(rest.to_string()))
+        } else {
+            Ok(Tag::Positive(trimmed.to_string()))
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct HermitConfig {
-    pub tags: Option<Vec<String>>,
+    /// These tags are defined by this config.
+    #[serde(default)]
+    pub tags: Vec<Tag>,
+    /// List of dotfiles to manage
+    #[serde(default)]
     pub files: Vec<DotfileEntry>,
-    pub install: Option<Vec<InstallEntry>>,
-    pub sources: Option<HashMap<String, String>>,
-    pub depends: Option<Vec<String>>,
+    /// List of applications to install
+    #[serde(default)]
+    pub install: Vec<InstallEntry>,
+    /// Sources for install commands, instructions for how to install applications.
+    #[serde(default)]
+    pub sources: HashMap<String, String>,
+    /// Dependencies that also need to be installed.
+    #[serde(default)]
+    pub depends: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,7 +97,7 @@ pub struct DotfileEntry {
     pub source: String,
     pub target: String,
     pub link: LinkType,
-    pub tags: Option<Vec<String>>,
+    pub tags: Option<Vec<Tag>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -70,39 +106,12 @@ pub struct InstallEntry {
     pub check_cmd: Option<String>,
     pub source: Option<String>,
     pub version: Option<String>,
-    pub tags: Option<Vec<String>>,
+    pub tags: Option<Vec<Tag>>,
     #[serde(default)]
     pub variables: std::collections::HashMap<String, String>,
 }
 
 impl InstallEntry {
-    pub fn get(&self, key: &str) -> Option<&str> {
-        match key {
-            "name" => Some(self.name.as_str()),
-            "check_cmd" => self.check_cmd.as_deref(),
-            "source" => self.source.as_deref(),
-            "version" => self.version.as_deref(),
-            _ => self.variables.get(key).map(|s| s.as_str()),
-        }
-    }
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    pub fn check_cmd(&self) -> Option<&str> {
-        self.check_cmd.as_deref()
-    }
-    pub fn source(&self) -> Option<&str> {
-        self.source.as_deref()
-    }
-    pub fn tags(&self) -> Option<&Vec<String>> {
-        self.tags.as_ref()
-    }
-    pub fn version(&self) -> Option<&str> {
-        self.version.as_deref()
-    }
-    pub fn variables_map(&self) -> &std::collections::HashMap<String, String> {
-        &self.variables
-    }
     pub fn to_handlebars_map(&self) -> std::collections::HashMap<String, String> {
         let mut map = self.variables.clone();
         map.insert("name".to_string(), self.name.clone());
@@ -115,7 +124,7 @@ impl InstallEntry {
 
 pub fn load_hermit_config(path: &str) -> anyhow::Result<HermitConfig> {
     let content = fs::read_to_string(path)?;
-    let config: HermitConfig = serde_yaml::from_str(&content)?;
+    let config: HermitConfig = serde_yml::from_str(&content)?;
     Ok(config)
 }
 
@@ -144,8 +153,8 @@ fn main() -> Result<()> {
             // 3. Build actions
             let mut actions: Vec<Arc<dyn Action>> = Vec::new();
             for (path, cfg) in &configs {
-                let config_tags = cfg.tags.clone().unwrap_or_default();
-                let depends = cfg.depends.clone().unwrap_or_default();
+                let config_tags = &cfg.tags;
+                let depends = &cfg.depends;
                 for file in &cfg.files {
                     let mut tags = config_tags.clone();
                     if let Some(ftags) = &file.tags {
@@ -161,29 +170,33 @@ fn main() -> Result<()> {
                             .display()
                             .to_string(),
                         dst: file.target.clone(),
-                        tags,
+                        tags: tags.clone(),
                         depends: depends.clone(),
                     }));
                 }
-                if let Some(installs) = &cfg.install {
-                    for inst in installs {
-                        let mut tags = config_tags.clone();
-                        if let Some(itags) = inst.tags() {
-                            tags.extend(itags.iter().cloned());
-                        }
-                        let id = format!("install:{}:{}", path.display(), inst.name);
-                        actions.push(Arc::new(InstallAction {
-                            id,
-                            name: inst.name.clone(),
-                            tags,
-                            depends: depends.clone(),
-                            check_cmd: inst.check_cmd.clone(),
-                            source: inst.source.clone(),
-                            version: inst.version.clone(),
-                            sources_map: cfg.sources.clone(),
-                            variables: inst.variables.clone(),
-                        }));
+                for inst in &cfg.install {
+                    let mut tags = config_tags.clone();
+                    if let Some(itags) = &inst.tags {
+                        tags.extend(itags.iter().cloned());
                     }
+                    let id = format!("install:{}:{}", path.display(), inst.name);
+                    let install_cmd = cfg
+                        .sources
+                        .get(&inst.name);
+                    let Some(install_cmd) = install_cmd else {
+                        eprintln!("[hermitgrab] No source found for install: {}", inst.name);
+                        continue;
+                    };
+                    actions.push(Arc::new(InstallAction {
+                        id,
+                        name: inst.name.clone(),
+                        tags: tags.clone(),
+                        depends: depends.clone(),
+                        check_cmd: inst.check_cmd.clone(),
+                        install_cmd: install_cmd.clone(),
+                        version: inst.version.clone(),
+                        variables: inst.variables.clone(),
+                    }));
                 }
             }
             // 4. Topo sort actions by dependencies (simple, by id)

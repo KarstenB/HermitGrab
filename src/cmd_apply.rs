@@ -205,13 +205,11 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                 }
             }
         }
-        if let Some(apps) = config.install {
-            if let Some(sources) = &config.sources {
                 let reg = Handlebars::new();
-                for entry in apps {
-                    let name = entry.name();
-                    let check_cmd = entry.check_cmd().unwrap_or("");
-                    let source = entry.source().unwrap_or("");
+                for entry in config.install {
+                    let name = entry.name;
+                    let check_cmd = entry.check_cmd.as_deref().unwrap_or("");
+                    let source = entry.source.as_deref().unwrap_or("");
                     if !check_cmd.is_empty() {
                         let status = std::process::Command::new("sh")
                             .arg("-c")
@@ -252,7 +250,7 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                             }
                         }
                     }
-                    if let Some(template) = sources.get(source) {
+                    if let Some(template) = config.sources.get(source) {
                         let cmd = reg
                             .render_template(template, &entry.check_cmd)
                             .unwrap_or_else(|_| template.clone());
@@ -280,8 +278,6 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
                     } else {
                         println!("[hermitgrab] Unknown source: {} for {}", source, name);
                     }
-                }
-            }
         }
         if !errors.is_empty() {
             let summary = colorize(
