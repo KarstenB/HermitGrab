@@ -209,7 +209,7 @@ pub fn run_with_dir(config_dir: Option<&str>, verbose: bool) -> Result<()> {
             if let Some(sources) = &config.sources {
                 let reg = Handlebars::new();
                 for entry in apps {
-                    let name = entry.name().unwrap_or("");
+                    let name = entry.name();
                     let check_cmd = entry.check_cmd().unwrap_or("");
                     let source = entry.source().unwrap_or("");
                     if !check_cmd.is_empty() {

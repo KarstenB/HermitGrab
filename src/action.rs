@@ -1,6 +1,7 @@
 use crate::atomic_link;
 use crate::hermitgrab_error::AtomicLinkError;
 use anyhow::Result;
+use handlebars::Handlebars;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HermitGrabError {
@@ -70,6 +71,7 @@ pub struct InstallAction {
     pub source: Option<String>,
     pub version: Option<String>,
     pub sources_map: Option<std::collections::HashMap<String, String>>,
+    pub variables: std::collections::HashMap<String, String>, // Add variables field
 }
 
 impl Action for InstallAction {
@@ -105,7 +107,13 @@ impl Action for InstallAction {
         if let Some(source) = &self.source {
             if let Some(sources_map) = &self.sources_map {
                 if let Some(template) = sources_map.get(source) {
-                    let cmd = template.replace("{{ name }}", &self.name);
+                    let reg = Handlebars::new();
+                    let mut data = self.variables.clone();
+                    data.insert("name".to_string(), self.name.clone());
+                    if let Some(version) = &self.version {
+                        data.insert("version".to_string(), version.clone());
+                    }
+                    let cmd = reg.render_template(template, &data).unwrap_or_else(|_| template.clone());
                     let status = std::process::Command::new("sh")
                         .arg("-c")
                         .arg(&cmd)

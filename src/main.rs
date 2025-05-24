@@ -71,6 +71,8 @@ pub struct InstallEntry {
     pub source: Option<String>,
     pub version: Option<String>,
     pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub variables: std::collections::HashMap<String, String>,
 }
 
 impl InstallEntry {
@@ -80,11 +82,11 @@ impl InstallEntry {
             "check_cmd" => self.check_cmd.as_deref(),
             "source" => self.source.as_deref(),
             "version" => self.version.as_deref(),
-            _ => None,
+            _ => self.variables.get(key).map(|s| s.as_str()),
         }
     }
-    pub fn name(&self) -> Option<&str> {
-        Some(self.name.as_str())
+    pub fn name(&self) -> &str {
+        &self.name
     }
     pub fn check_cmd(&self) -> Option<&str> {
         self.check_cmd.as_deref()
@@ -94,6 +96,20 @@ impl InstallEntry {
     }
     pub fn tags(&self) -> Option<&Vec<String>> {
         self.tags.as_ref()
+    }
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
+    }
+    pub fn variables_map(&self) -> &std::collections::HashMap<String, String> {
+        &self.variables
+    }
+    pub fn to_handlebars_map(&self) -> std::collections::HashMap<String, String> {
+        let mut map = self.variables.clone();
+        map.insert("name".to_string(), self.name.clone());
+        if let Some(version) = &self.version {
+            map.insert("version".to_string(), version.clone());
+        }
+        map
     }
 }
 
@@ -165,6 +181,7 @@ fn main() -> Result<()> {
                             source: inst.source.clone(),
                             version: inst.version.clone(),
                             sources_map: cfg.sources.clone(),
+                            variables: inst.variables.clone(),
                         }));
                     }
                 }

@@ -13,13 +13,15 @@ files:
     link: soft
 install:
   - name: fish
-    check_cmd: fish --version
+    check_cmd: false
     source: apt
     version: latest
     tags:
       - fish-latest
+    variables:
+      bla: "blubb"
   - name: fish
-    check_cmd: fish --version
+    check_cmd: false
     source: apt
     version: 4.0
     tags:
@@ -27,5 +29,5 @@ install:
 depends:
   - utils/starship
 sources:
-  apt: apt-get install -y {{ name }}
+  apt: echo apt-get install -y {{ name }} {{ version }} {{ bla }}
   brew: brew install {{ name }}
