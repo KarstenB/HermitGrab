@@ -24,6 +24,9 @@ struct Cli {
     /// Increase output verbosity
     #[arg(short, long, global = true)]
     verbose: bool,
+    /// Only include actions matching these tags (can be specified multiple times)
+    #[arg(long = "tag", value_name = "TAG", num_args = 0.., global = true)]
+    tags: Vec<String>,
 }
 
 #[derive(Subcommand)]
@@ -83,9 +86,10 @@ pub struct HermitConfig {
     pub depends: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkType {
+    #[default]
     Soft,
     Hard,
     Copy,
@@ -95,6 +99,7 @@ pub enum LinkType {
 pub struct DotfileEntry {
     pub source: String,
     pub target: String,
+    #[serde(default)]
     pub link: LinkType,
     #[serde(default)]
     pub tags: Vec<Tag>,
@@ -151,11 +156,62 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("[hermitgrab] Error loading {}: {}", path.display(), e),
                 }
             }
-            // 3. Build actions
+            // 2.5. Filter configs by tags if specified
+            let user_tags: Vec<String> = cli.tags.iter().map(|t| t.to_string()).collect();
+            let mut filtered_configs = Vec::new();
+            for (path, cfg) in configs {
+                if user_tags.is_empty() {
+                    filtered_configs.push((path, cfg));
+                } else {
+                    // If config defines tags, require at least one positive match and no negative match
+                    let mut include = false;
+                    for tag in &cfg.tags {
+                        match tag {
+                            Tag::Positive(t) => {
+                                if user_tags.iter().any(|ut| ut == t) {
+                                    include = true;
+                                }
+                            }
+                            Tag::Negative(t) => {
+                                if user_tags.iter().any(|ut| ut == t) {
+                                    include = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if include || cfg.tags.is_empty() {
+                        filtered_configs.push((path, cfg));
+                    }
+                }
+            }
+            // 3. Build actions (filtered by tags)
             let mut actions: Vec<Arc<dyn Action>> = Vec::new();
-            for (path, cfg) in &configs {
+            for (path, cfg) in &filtered_configs {
                 let depends = &cfg.depends;
                 for file in &cfg.files {
+                    // Filter file actions by tags
+                    if !user_tags.is_empty() {
+                        let mut include = false;
+                        for tag in &file.tags {
+                            match tag {
+                                Tag::Positive(t) => {
+                                    if user_tags.iter().any(|ut| ut == t) {
+                                        include = true;
+                                    }
+                                }
+                                Tag::Negative(t) => {
+                                    if user_tags.iter().any(|ut| ut == t) {
+                                        include = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if !include && !file.tags.is_empty() {
+                            continue;
+                        }
+                    }
                     let id = format!("link:{}:{}", path.display(), file.target);
                     actions.push(Arc::new(AtomicLinkAction {
                         id,
@@ -171,8 +227,30 @@ fn main() -> Result<()> {
                     }));
                 }
                 for inst in &cfg.install {
+                    // Filter install actions by tags
+                    if !user_tags.is_empty() {
+                        let mut include = false;
+                        for tag in &inst.tags {
+                            match tag {
+                                Tag::Positive(t) => {
+                                    if user_tags.iter().any(|ut| ut == t) {
+                                        include = true;
+                                    }
+                                }
+                                Tag::Negative(t) => {
+                                    if user_tags.iter().any(|ut| ut == t) {
+                                        include = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if !include && !inst.tags.is_empty() {
+                            continue;
+                        }
+                    }
                     let id = format!("install:{}:{}", path.display(), inst.name);
-                    let install_cmd = cfg.sources.get(&inst.name);
+                    let install_cmd = inst.source.as_ref().and_then(|src| cfg.sources.get(src));
                     let Some(install_cmd) = install_cmd else {
                         eprintln!("[hermitgrab] No source found for install: {}", inst.name);
                         continue;
