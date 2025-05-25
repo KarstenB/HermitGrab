@@ -27,11 +27,10 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     tags.insert(format!("os_bitness={}", info.bitness()).into());
     if let Some(architecture) = info.architecture() {
         tags.insert(format!("arch={}", architecture).into());
-    } 
+    }
     tags
 }
 
 fn get_hostname() -> Result<String, std::io::Error> {
     hostname::get().map(|h| h.to_string_lossy().to_string())
 }
-

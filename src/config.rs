@@ -1,7 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde::Deserializer;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::{Path, PathBuf};
 
 use crate::hermitgrab_error::ConfigLoadError;
 
@@ -95,7 +95,7 @@ impl HermitConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkType {
     #[default]
@@ -141,8 +141,8 @@ impl InstallEntry {
 pub struct GlobalConfig {
     pub subconfigs: Vec<HermitConfig>,
     pub all_profiles: BTreeMap<String, BTreeSet<Tag>>, // lowercased, deduped, error on duplicate
-    pub all_tags: BTreeSet<Tag>, // lowercased, deduped
-    pub all_sources: BTreeMap<String, String>, // last one wins
+    pub all_tags: BTreeSet<Tag>,                       // lowercased, deduped
+    pub all_sources: BTreeMap<String, String>,         // last one wins
 }
 
 impl GlobalConfig {
@@ -166,19 +166,29 @@ impl GlobalConfig {
             for (profile, tags) in &config.profiles {
                 let profile_lc = profile.to_lowercase();
                 if all_profiles.contains_key(&profile_lc) {
-                    return Err(ConfigLoadError::DuplicateProfile(profile_lc.clone(), config.path.clone()));
+                    return Err(ConfigLoadError::DuplicateProfile(
+                        profile_lc.clone(),
+                        config.path.clone(),
+                    ));
                 }
                 all_profiles.insert(profile_lc, tags.clone());
             }
-            subconfigs.push( config );
+            subconfigs.push(config);
         }
-        Ok(GlobalConfig { subconfigs, all_profiles, all_tags, all_sources })
+        Ok(GlobalConfig {
+            subconfigs,
+            all_profiles,
+            all_tags,
+            all_sources,
+        })
     }
 }
 
 pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, ConfigLoadError> {
-    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| ConfigLoadError::IoError(e, path.as_ref().to_path_buf()))?;
-    let mut config: HermitConfig = serde_yml::from_str(&content).map_err(|e| ConfigLoadError::SerdeYmlError(e, path.as_ref().to_path_buf()))?;
+    let content = std::fs::read_to_string(path.as_ref())
+        .map_err(|e| ConfigLoadError::IoError(e, path.as_ref().to_path_buf()))?;
+    let mut config: HermitConfig = serde_yml::from_str(&content)
+        .map_err(|e| ConfigLoadError::SerdeYmlError(e, path.as_ref().to_path_buf()))?;
     config.path = path.as_ref().to_path_buf();
     Ok(config)
 }

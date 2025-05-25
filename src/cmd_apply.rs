@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::config::{GlobalConfig, Tag};
 use crate::hermitgrab_error::ApplyError;
-use crate::{Action, Cli};
+use crate::{Action, Cli, InstallAction};
 
 pub(crate) fn apply_with_tags(
     cli: Cli,
@@ -26,14 +26,15 @@ pub(crate) fn apply_with_tags(
             a.tags()
         );
     }
-
-    print!("Proceed? [y/N]: ");
-    std::io::stdout().flush().unwrap();
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input).unwrap();
-    if !matches!(input.trim(), "y" | "Y") {
-        println!("Aborted.");
-        return Ok(());
+    if !cli.confirm {
+        print!("Proceed? [y/N]: ");
+        std::io::stdout().flush().unwrap();
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
+        if !matches!(input.to_lowercase().trim(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
     }
     let mut results = Vec::new();
     for a in &sorted {
@@ -107,14 +108,19 @@ fn create_actions(
         let depends = &cfg.depends;
         for file in &cfg.files {
             let id = format!("link:{}:{}", cfg.path().display(), file.target);
-            let source = cfg.path().parent().expect("File should have a directory").join(&file.source);
-            actions.push(Arc::new(crate::AtomicLinkAction {
+            let source = cfg
+                .path()
+                .parent()
+                .expect("File should have a directory")
+                .join(&file.source);
+            actions.push(Arc::new(crate::AtomicLinkAction::new(
                 id,
-                src: source,
-                dst: file.target.clone(),
-                tags: file.requires.clone(),
-                depends: depends.clone(),
-            }));
+                source,
+                file.target.clone(),
+                file.requires.clone(),
+                depends.clone(),
+                file.link,
+            )));
         }
         for inst in &cfg.install {
             // Filter install actions by tags
@@ -128,16 +134,16 @@ fn create_actions(
             let Some(install_cmd) = install_cmd else {
                 return Err(ApplyError::InstallSourceNotFound(inst.name.clone()));
             };
-            actions.push(Arc::new(crate::InstallAction {
+            actions.push(Arc::new(InstallAction::new(
                 id,
-                name: inst.name.clone(),
-                tags: inst.requires.clone(),
-                depends: depends.clone(),
-                check_cmd: inst.check_cmd.clone(),
-                install_cmd: install_cmd.clone(),
-                version: inst.version.clone(),
-                variables: inst.variables.clone(),
-            }));
+                inst.name.clone(),
+                inst.requires.clone(),
+                depends.clone(),
+                inst.check_cmd.clone(),
+                install_cmd.clone(),
+                inst.version.clone(),
+                inst.variables.clone(),
+            )));
         }
     }
     Ok(actions)

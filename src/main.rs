@@ -3,16 +3,16 @@ use clap::{Parser, Subcommand};
 
 pub mod action;
 pub mod atomic_link;
-pub mod hermitgrab_error;
-pub mod detector;
-pub mod config;
 pub mod cmd_apply;
 pub mod cmd_init;
+pub mod config;
+pub mod detector;
+pub mod hermitgrab_error;
 
 pub use crate::action::{Action, AtomicLinkAction, InstallAction};
 pub use crate::cmd_init::run as init_command;
+pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
 pub use crate::hermitgrab_error::AtomicLinkError;
-pub use crate::config::{RequireTag, HermitConfig, DotfileEntry, InstallEntry, LinkType};
 pub use std::collections::HashSet;
 pub use std::sync::Arc;
 
@@ -25,6 +25,8 @@ struct Cli {
     /// Increase output verbosity
     #[arg(short, long, global = true)]
     verbose: bool,
+    #[arg(short='y', long, global = true)]
+    confirm: bool,
     /// Only include actions matching these tags (can be specified multiple times)
     #[arg(long = "tag", value_name = "TAG", num_args = 0.., global = true)]
     tags: Vec<String>,
@@ -81,26 +83,29 @@ fn main() -> Result<()> {
             println!("[hermitgrab] Status:");
             // TODO: Implement status reporting
         }
-        Commands::Get { get_command } => {
-            match get_command {
-                GetCommand::Tags => {
-                    let mut all_tags = global_config.all_tags.clone();
-                    all_tags.extend(detected_tags);
-                    println!("All tags (including auto-detected):");
-                    for t in all_tags {
-                        println!("- {}", t);
-                    }
-                }
-                GetCommand::Profiles => {
-                    println!("All profiles:");
-                    for (profile, tags) in &global_config.all_profiles {
-                        println!("- {}: {}", profile, tags.iter().map(|t|t.to_string()).collect::<Vec<_>>().join(", "));
-                    }
+        Commands::Get { get_command } => match get_command {
+            GetCommand::Tags => {
+                let mut all_tags = global_config.all_tags.clone();
+                all_tags.extend(detected_tags);
+                println!("All tags (including auto-detected):");
+                for t in all_tags {
+                    println!("- {}", t);
                 }
             }
-        }
+            GetCommand::Profiles => {
+                println!("All profiles:");
+                for (profile, tags) in &global_config.all_profiles {
+                    println!(
+                        "- {}: {}",
+                        profile,
+                        tags.iter()
+                            .map(|t| t.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+            }
+        },
     }
     Ok(())
 }
-
-

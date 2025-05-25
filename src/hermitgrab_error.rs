@@ -41,3 +41,29 @@ pub enum ApplyError {
     #[error("Install source not found: {0}")]
     InstallSourceNotFound(String),
 }
+
+#[derive(Debug, Error)]
+pub enum ActionError {
+    #[error(transparent)]
+    LinkActionError(#[from] LinkActionError),
+    #[error(transparent)]
+    InstallActionError(#[from] InstallActionError),
+}
+
+#[derive(Debug, Error)]
+pub enum LinkActionError {
+    #[error("Failed to create parent directory for destination {1} due to IO error: {0}")]
+    CreateParentDir(std::io::Error, PathBuf),
+    #[error(transparent)]
+    AtomicLinkError(#[from] AtomicLinkError),
+}
+
+#[derive(Debug, Error)]
+pub enum InstallActionError {
+    #[error(transparent)]
+    RenderError(#[from] handlebars::RenderError),
+    #[error("Install command failed: {0} with exit code {1}")]
+    CommandFailed(String, i32),
+    #[error("Failed to launch install command: {0} due to IO error: {1}")]
+    CommandFailedLaunch(String, std::io::Error),
+}

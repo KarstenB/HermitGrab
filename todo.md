@@ -1,9 +1,8 @@
 - [ ] Create smart-patching
 - [ ] Support nushell in install_cmd?
-- [ ] Support multi-line execution in install_cmd when shebang is detected
-- [ ] Create detectors
-- [ ] Properly use tags
-- [ ] Treat highest level config special by promoting the sources
+- [x] Support multi-line execution in install_cmd when shebang is detected
+- [x] Create detectors
+- [x] Properly use tags
 - [ ] Make target and link type Optional
 - [ ] Validate configuration:
     - [ ] check that sources exist

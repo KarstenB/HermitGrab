@@ -6,6 +6,7 @@ use std::path::Path;
 pub fn atomic_symlink<P: AsRef<Path>, Q: AsRef<Path>>(
     src: P,
     dst: Q,
+    _link_type: crate::LinkType, // Currently unused, but can be extended for different link types
 ) -> Result<(), AtomicLinkError> {
     let src = src.as_ref();
     let dst = dst.as_ref();
@@ -34,6 +35,8 @@ pub fn atomic_symlink<P: AsRef<Path>, Q: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
+    use crate::LinkType;
+
     use super::*;
     use std::env;
     use std::fs;
@@ -44,7 +47,7 @@ mod tests {
         let src = tmp_dir.join("hermitgrab_test_src");
         let dst = tmp_dir.join("hermitgrab_test_dst");
         fs::write(&src, b"test").unwrap();
-        atomic_symlink(&src, &dst).unwrap();
+        atomic_symlink(&src, &dst, LinkType::Soft).unwrap();
         assert!(dst.exists());
         assert_eq!(fs::read_to_string(&dst).unwrap(), "test");
         fs::remove_file(&src).unwrap();
@@ -59,7 +62,7 @@ mod tests {
         if dst.exists() {
             fs::remove_file(&dst).unwrap();
         }
-        let result = atomic_symlink(&src, &dst);
+        let result = atomic_symlink(&src, &dst, LinkType::Soft);
         assert!(matches!(
             result,
             Err(crate::AtomicLinkError::SourceNotFound(_))
@@ -73,7 +76,7 @@ mod tests {
         let dst = tmp_dir.join("hermitgrab_test_dst3");
         fs::write(&src, b"test").unwrap();
         fs::write(&dst, b"existing").unwrap();
-        let result = atomic_symlink(&src, &dst);
+        let result = atomic_symlink(&src, &dst, LinkType::Soft);
         assert!(matches!(
             result,
             Err(crate::AtomicLinkError::DestinationExists(_))
@@ -89,7 +92,7 @@ mod tests {
         let dst = tmp_dir.join("hermitgrab_test_dst4");
         fs::write(&src, b"test").unwrap();
         unix_fs::symlink(&src, &dst).unwrap();
-        let result = atomic_symlink(&src, &dst);
+        let result = atomic_symlink(&src, &dst, LinkType::Soft);
         assert!(result.is_ok());
         fs::remove_file(&src).unwrap();
         fs::remove_file(&dst).unwrap();
@@ -109,7 +112,7 @@ mod tests {
             fs::remove_dir_all(&src).unwrap();
         }
         fs::create_dir(&src).unwrap();
-        atomic_symlink(&src, &dst).unwrap();
+        atomic_symlink(&src, &dst, LinkType::Soft).unwrap();
         assert!(dst.exists());
         assert!(dst.is_symlink());
         assert!(dst.read_link().unwrap() == src);
