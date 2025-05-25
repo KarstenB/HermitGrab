@@ -1,28 +1,3 @@
-provides:
-  - fish
-
-files:
-  - source: fish/config.fish
-    target: ~/.config/fish/config.fish
-    requires:
-      - -windows # Not for windows
-install:
-  - name: fish
-    check_cmd: false
-    source: apt
-    version: latest
-    requires:
-      - fish-latest
-    variables:
-      bla: "blubb"
-  - name: fish
-    check_cmd: false
-    source: apt
-    version: 4.0
-    requires:
-      - fish-4.0
-depends:
-  - utils/starship
 sources:
   apt: echo apt-get install -y {{ name }} {{ version }} {{ bla }}
   brew: brew install {{ name }}
