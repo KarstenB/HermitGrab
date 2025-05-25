@@ -25,7 +25,7 @@ struct Cli {
     /// Increase output verbosity
     #[arg(short, long, global = true)]
     verbose: bool,
-    #[arg(short='y', long, global = true)]
+    #[arg(short = 'y', long, global = true)]
     confirm: bool,
     /// Only include actions matching these tags (can be specified multiple times)
     #[arg(long = "tag", value_name = "TAG", num_args = 0.., global = true)]

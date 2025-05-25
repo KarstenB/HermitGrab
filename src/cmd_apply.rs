@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::config::{GlobalConfig, Tag};
-use crate::hermitgrab_error::ApplyError;
+use crate::hermitgrab_error::{ActionError, ApplyError};
 use crate::{Action, Cli, InstallAction};
 
 pub(crate) fn apply_with_tags(
@@ -16,7 +16,39 @@ pub(crate) fn apply_with_tags(
     let active_tags = get_active_tags(&cli, detected_tags, global_config)?;
     println!("[hermitgrab] Active tags: {:?}", active_tags);
     let actions = create_actions(global_config)?;
-    let sorted = topological_sort(actions);
+    let filtered_actions = filter_actions_by_tags(&actions, &active_tags);
+    let sorted = topological_sort(filtered_actions);
+    present_execution_plan(&sorted);
+    if !cli.confirm {
+        confirm_with_user()?;
+    }
+    let results = execute_actions(&sorted);
+    summarize(&sorted, &results, cli.verbose);
+    Ok(())
+}
+
+fn filter_actions_by_tags(
+    actions: &[Arc<dyn Action + 'static>],
+    active_tags: &BTreeSet<Tag>,
+) -> Vec<Arc<dyn Action + 'static>> {
+    let mut filtered: Vec<Arc<dyn Action + 'static>> = Vec::new();
+    for action in actions {
+        let tags = action.tags();
+        let mut matches = true;
+        for tag in tags {
+            if !tag.matches(active_tags) {
+                matches = false;
+                break;
+            }
+        }
+        if matches {
+            filtered.push(action.clone());
+        }
+    }
+    filtered
+}
+
+fn present_execution_plan(sorted: &[Arc<dyn Action + 'static>]) {
     println!("[hermitgrab] Execution plan:");
     for (i, a) in sorted.iter().enumerate() {
         println!(
@@ -26,29 +58,62 @@ pub(crate) fn apply_with_tags(
             a.tags()
         );
     }
-    if !cli.confirm {
-        print!("Proceed? [y/N]: ");
-        std::io::stdout().flush().unwrap();
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
-        if !matches!(input.to_lowercase().trim(), "y" | "yes") {
-            println!("Aborted.");
-            return Ok(());
+}
+
+fn confirm_with_user() -> Result<(), ApplyError> {
+    print!("Proceed? [y/N]: ");
+    std::io::stdout().flush().unwrap();
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).unwrap();
+    if !matches!(input.to_lowercase().trim(), "y" | "yes") {
+        println!("Aborted.");
+        return Err(ApplyError::UserAborted);
+    }
+    Ok(())
+}
+
+fn summarize(
+    actions: &[Arc<dyn Action + 'static>],
+    results: &[(String, Result<(), ActionError>)],
+    verbose: bool,
+) {
+    println!("[hermitgrab] Summary:");
+    for (action, (desc, res)) in actions.iter().zip(results) {
+        match res {
+            Ok(_) => {
+                println!("[ok] {}", desc);
+                if verbose {
+                    print_action_output(action);
+                }
+            }
+            Err(e) => {
+                println!("[err] {}: {}", desc, e);
+                print_action_output(action);
+            }
         }
     }
+}
+
+fn print_action_output(action: &Arc<dyn Action>) {
+    if let Some(output) = action.get_output() {
+        let stdout = output.standard_output().trim();
+        let stderr = output.error_output().trim();
+        if !stdout.is_empty() {
+            println!("[stdout] {}", stdout);
+        }
+        if !stderr.is_empty() {
+            eprintln!("[stderr] {}", stderr);
+        }
+    }
+}
+
+fn execute_actions(sorted: &[Arc<dyn Action + 'static>]) -> Vec<(String, Result<(), ActionError>)> {
     let mut results = Vec::new();
-    for a in &sorted {
+    for a in sorted {
         let res = a.execute();
         results.push((a.short_description(), res));
     }
-    println!("[hermitgrab] Summary:");
-    for (desc, res) in &results {
-        match res {
-            Ok(_) => println!("[ok] {}", desc),
-            Err(e) => println!("[err] {}: {}", desc, e),
-        }
-    }
-    Ok(())
+    results
 }
 
 fn get_active_tags(

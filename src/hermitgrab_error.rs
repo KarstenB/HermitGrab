@@ -40,6 +40,8 @@ pub enum ApplyError {
     ProfileNotFound(String),
     #[error("Install source not found: {0}")]
     InstallSourceNotFound(String),
+    #[error("The user aborted the operation")]
+    UserAborted,
 }
 
 #[derive(Debug, Error)]

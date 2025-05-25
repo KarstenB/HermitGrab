@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use crate::LinkType;
 use crate::RequireTag;
@@ -10,9 +11,34 @@ use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
 use handlebars::Handlebars;
 
+#[derive(Debug, Clone)]
+pub struct ActionOutput {
+    standard_output: String,
+    error_output: String,
+}
+
+impl ActionOutput {
+    pub fn new(standard_output: String, error_output: String) -> Self {
+        Self {
+            standard_output,
+            error_output,
+        }
+    }
+
+    pub fn standard_output(&self) -> &str {
+        &self.standard_output
+    }
+
+    pub fn error_output(&self) -> &str {
+        &self.error_output
+    }
+}
 pub trait Action: Send + Sync {
     fn short_description(&self) -> String;
     fn long_description(&self) -> String;
+    fn get_output(&self) -> Option<ActionOutput> {
+        None
+    }
     fn tags(&self) -> &[RequireTag];
     fn dependencies(&self) -> &[String];
     fn id(&self) -> String; // Unique identifier for sorting/deps
@@ -85,8 +111,10 @@ pub struct InstallAction {
     install_cmd: String,
     version: Option<String>,
     variables: HashMap<String, String>,
+    output: Mutex<Option<ActionOutput>>,
 }
 impl InstallAction {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         name: String,
@@ -106,7 +134,42 @@ impl InstallAction {
             install_cmd,
             version,
             variables,
+            output: Mutex::new(None),
         }
+    }
+
+    fn install_required(&self) -> Result<bool, ActionError> {
+        if let Some(check_cmd) = &self.check_cmd {
+            let status = execute_script(check_cmd);
+            // We ignore errors here which may be caused by the command not being found
+            // or other issues, as we only care about successful execution.
+            if let Ok(output) = status {
+                if output.status.success() {
+                    let action_output = ActionOutput::new(
+                        "Skipped installation because check passed".to_string(),
+                        "".to_string(),
+                    );
+                    *self.output.lock().expect("Expected to unlock output mutex") =
+                        Some(action_output);
+                    return Ok(false); // Already installed
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    fn prepare_install_cmd(&self) -> Result<String, ActionError> {
+        let reg = Handlebars::new();
+        let mut data = self.variables.clone();
+        data.insert("name".to_string(), self.name.clone());
+        if let Some(version) = &self.version {
+            data.insert("version".to_string(), version.clone());
+        }
+        let template = shellexpand::tilde(&self.install_cmd).to_string();
+        let cmd = reg
+            .render_template(&template, &data)
+            .map_err(InstallActionError::RenderError)?;
+        Ok(cmd)
     }
 }
 
@@ -127,39 +190,17 @@ impl Action for InstallAction {
         self.id.clone()
     }
     fn execute(&self) -> Result<(), ActionError> {
-        // Check if already installed
-        if let Some(check_cmd) = &self.check_cmd {
-            let status = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(check_cmd)
-                .status();
-            if let Ok(status) = status {
-                if status.success() {
-                    return Ok(()); // Already installed
-                }
-            }
+        if !self.install_required()? {
+            return Ok(()); // Installation not required
         }
-        // Install using the specified source
-        let reg = Handlebars::new();
-        let mut data = self.variables.clone();
-        data.insert("name".to_string(), self.name.clone());
-        if let Some(version) = &self.version {
-            data.insert("version".to_string(), version.clone());
-        }
-        let template = shellexpand::tilde(&self.install_cmd).to_string();
-        let cmd = reg
-            .render_template(&template, &data)
-            .map_err(InstallActionError::RenderError)?;
-        let output = if cmd.starts_with("#!") {
-            execute_script(&cmd)
-        } else {
-            std::process::Command::new("sh")
-                .arg("-c")
-                .arg(&cmd)
-                .output()
-        };
+        let cmd = self.prepare_install_cmd()?;
+        let output = execute_script(&cmd);
         match output {
             Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let action_output = ActionOutput::new(stdout, stderr);
+                *self.output.lock().expect("Expected to unlock output mutex") = Some(action_output);
                 let status = output.status;
                 if status.success() {
                     Ok(())
@@ -173,9 +214,18 @@ impl Action for InstallAction {
             Err(e) => Err(InstallActionError::CommandFailedLaunch(cmd, e))?,
         }
     }
+    fn get_output(&self) -> Option<ActionOutput> {
+        self.output
+            .lock()
+            .expect("Expected to unlock output mutex")
+            .clone()
+    }
 }
 
 fn execute_script(cmd: &str) -> Result<std::process::Output, std::io::Error> {
+    if !cmd.starts_with("#!") {
+        return std::process::Command::new("sh").arg("-c").arg(cmd).output();
+    };
     tempfile::NamedTempFile::new()
         .and_then(|mut file| {
             writeln!(file, "{}", cmd)?;
