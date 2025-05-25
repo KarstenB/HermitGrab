@@ -1,17 +1,17 @@
-tags:
+provides:
   - fish
 
 files:
   - source: fish/config.fish
     target: ~/.config/fish/config.fish
-    tags:
+    requires:
       - -windows # Not for windows
 install:
   - name: fish
     check_cmd: false
     source: apt
     version: latest
-    tags:
+    requires:
       - fish-latest
     variables:
       bla: "blubb"
@@ -19,7 +19,7 @@ install:
     check_cmd: false
     source: apt
     version: 4.0
-    tags:
+    requires:
       - fish-4.0
 depends:
   - utils/starship

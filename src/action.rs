@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-use crate::Tag;
+use crate::RequireTag;
 use crate::atomic_link;
 use crate::hermitgrab_error::AtomicLinkError;
 use anyhow::Result;
@@ -21,7 +22,7 @@ pub enum HermitGrabError {
 pub trait Action: Send + Sync {
     fn short_description(&self) -> String;
     fn long_description(&self) -> String;
-    fn tags(&self) -> &[Tag];
+    fn tags(&self) -> &[RequireTag];
     fn dependencies(&self) -> &[String];
     fn id(&self) -> String; // Unique identifier for sorting/deps
     fn execute(&self) -> Result<(), HermitGrabError>;
@@ -29,23 +30,23 @@ pub trait Action: Send + Sync {
 
 pub struct AtomicLinkAction {
     pub id: String,
-    pub src: String,
+    pub src: PathBuf,
     pub dst: String,
-    pub tags: Vec<Tag>,
+    pub tags: Vec<RequireTag>,
     pub depends: Vec<String>,
 }
 
 impl Action for AtomicLinkAction {
     fn short_description(&self) -> String {
-        format!("Link {} -> {}", self.src, self.dst)
+        format!("Link {} -> {}", self.src.display(), self.dst)
     }
     fn long_description(&self) -> String {
         format!(
             "Symlink/copy/link from {} to {} (tags: {:?})",
-            self.src, self.dst, self.tags
+            self.src.display(), self.dst, self.tags
         )
     }
-    fn tags(&self) -> &[Tag] {
+    fn tags(&self) -> &[RequireTag] {
         &self.tags
     }
     fn dependencies(&self) -> &[String] {
@@ -55,14 +56,13 @@ impl Action for AtomicLinkAction {
         self.id.clone()
     }
     fn execute(&self) -> Result<(), HermitGrabError> {
-        let src = std::path::Path::new(&self.src);
         let dst_str = shellexpand::tilde(&self.dst).to_string();
         let dst = std::path::Path::new(&dst_str);
         let parent = dst.parent();
         if let Some(parent) = parent {
             std::fs::create_dir_all(parent)?;
         }
-        atomic_link::atomic_symlink(src, dst)?;
+        atomic_link::atomic_symlink(&self.src, dst)?;
         Ok(())
     }
 }
@@ -70,12 +70,12 @@ impl Action for AtomicLinkAction {
 pub struct InstallAction {
     pub id: String,
     pub name: String,
-    pub tags: Vec<Tag>,
+    pub tags: Vec<RequireTag>,
     pub depends: Vec<String>,
     pub check_cmd: Option<String>,
     pub install_cmd: String,
     pub version: Option<String>,
-    pub variables: HashMap<String, String>, // Add variables field
+    pub variables: HashMap<String, String>,
 }
 
 impl Action for InstallAction {
@@ -85,7 +85,7 @@ impl Action for InstallAction {
     fn long_description(&self) -> String {
         format!("Install {} (tags: {:?})", self.name, self.tags)
     }
-    fn tags(&self) -> &[Tag] {
+    fn tags(&self) -> &[RequireTag] {
         &self.tags
     }
     fn dependencies(&self) -> &[String] {

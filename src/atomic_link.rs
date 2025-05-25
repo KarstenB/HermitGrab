@@ -3,18 +3,15 @@ use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
 
-/// Atomically create a symlink, replacing the target if it exists.
 pub fn atomic_symlink<P: AsRef<Path>, Q: AsRef<Path>>(
     src: P,
     dst: Q,
 ) -> Result<(), AtomicLinkError> {
     let src = src.as_ref();
     let dst = dst.as_ref();
-    // Check if source exists
     if !src.exists() {
         return Err(AtomicLinkError::SourceNotFound(src.display().to_string()));
     }
-    // If destination exists
     if dst.exists() {
         // If destination is a symlink to src, do nothing
         if let Ok(target) = dst.read_link() {
@@ -28,7 +25,7 @@ pub fn atomic_symlink<P: AsRef<Path>, Q: AsRef<Path>>(
                 dst.display().to_string(),
             ));
         }
-        // Remove the destination (symlink or otherwise)
+        //TODO: Create a backup of the existing symlink/file to support rollback
         fs::remove_file(dst)?;
     }
     unix_fs::symlink(src, dst)?;
@@ -96,5 +93,27 @@ mod tests {
         assert!(result.is_ok());
         fs::remove_file(&src).unwrap();
         fs::remove_file(&dst).unwrap();
+    }
+
+    #[test]
+    fn test_atomic_symlink_directory() {
+        let tmp_dir = env::temp_dir();
+        let src = tmp_dir.join("hermitgrab_test_src_dir");
+        let dst = tmp_dir.join("hermitgrab_test_dst_dir");
+        if dst.exists() {
+            println!("Removing existing destination directory: {}", dst.display());
+            fs::remove_dir_all(&dst).unwrap();
+        }
+        if src.exists() {
+            println!("Removing existing source directory: {}", src.display());
+            fs::remove_dir_all(&src).unwrap();
+        }
+        fs::create_dir(&src).unwrap();
+        atomic_symlink(&src, &dst).unwrap();
+        assert!(dst.exists());
+        assert!(dst.is_symlink());
+        assert!(dst.read_link().unwrap() == src);
+        fs::remove_dir_all(&src).unwrap();
+        fs::remove_dir_all(&dst).unwrap();
     }
 }
