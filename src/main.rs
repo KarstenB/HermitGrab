@@ -96,7 +96,8 @@ pub struct DotfileEntry {
     pub source: String,
     pub target: String,
     pub link: LinkType,
-    pub tags: Option<Vec<Tag>>,
+    #[serde(default)]
+    pub tags: Vec<Tag>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -105,7 +106,8 @@ pub struct InstallEntry {
     pub check_cmd: Option<String>,
     pub source: Option<String>,
     pub version: Option<String>,
-    pub tags: Option<Vec<Tag>>,
+    #[serde(default)]
+    pub tags: Vec<Tag>,
     #[serde(default)]
     pub variables: std::collections::HashMap<String, String>,
 }
@@ -152,13 +154,8 @@ fn main() -> Result<()> {
             // 3. Build actions
             let mut actions: Vec<Arc<dyn Action>> = Vec::new();
             for (path, cfg) in &configs {
-                let config_tags = &cfg.tags;
                 let depends = &cfg.depends;
                 for file in &cfg.files {
-                    let mut tags = config_tags.clone();
-                    if let Some(ftags) = &file.tags {
-                        tags.extend(ftags.clone());
-                    }
                     let id = format!("link:{}:{}", path.display(), file.target);
                     actions.push(Arc::new(AtomicLinkAction {
                         id,
@@ -169,15 +166,11 @@ fn main() -> Result<()> {
                             .display()
                             .to_string(),
                         dst: file.target.clone(),
-                        tags: tags.clone(),
+                        tags: file.tags.clone(),
                         depends: depends.clone(),
                     }));
                 }
                 for inst in &cfg.install {
-                    let mut tags = config_tags.clone();
-                    if let Some(itags) = &inst.tags {
-                        tags.extend(itags.iter().cloned());
-                    }
                     let id = format!("install:{}:{}", path.display(), inst.name);
                     let install_cmd = cfg.sources.get(&inst.name);
                     let Some(install_cmd) = install_cmd else {
@@ -187,7 +180,7 @@ fn main() -> Result<()> {
                     actions.push(Arc::new(InstallAction {
                         id,
                         name: inst.name.clone(),
-                        tags: tags.clone(),
+                        tags: inst.tags.clone(),
                         depends: depends.clone(),
                         check_cmd: inst.check_cmd.clone(),
                         install_cmd: install_cmd.clone(),

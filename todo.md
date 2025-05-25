@@ -4,3 +4,8 @@
 - [ ] Create detectors
 - [ ] Properly use tags
 - [ ] Treat highest level config special by promoting the sources
+- [ ] Make target and link type Optional
+- [ ] Validate configuration:
+    - [ ] check that sources exist
+    - [ ] check that tags are not negative
+    - [ ] check that sources exist
