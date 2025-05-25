@@ -4,9 +4,7 @@ tags:
 files:
   - source: fish/config.fish
     target: ~/.config/fish/config.fish
-    link: soft
     tags:
-      - config
       - -windows # Not for windows
 install:
   - name: fish
@@ -28,3 +26,7 @@ depends:
 sources:
   apt: echo apt-get install -y {{ name }} {{ version }} {{ bla }}
   brew: brew install {{ name }}
+profiles:
+  default:
+    - fish-latest
+    - starship

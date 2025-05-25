@@ -9,6 +9,7 @@ clap = { version = "4.5.38", features = ["derive"] }
 directories = "6.0.0"
 git2 = "0.20.2"
 handlebars = "6.3.2"
+hostname = "0.4.1"
 regex = "1.11.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_derive = "1.0.219"

@@ -3,20 +3,66 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::{load_hermit_config, Action, AtomicLinkAction, Cli, InstallAction, Tag};
+use crate::{Action, AtomicLinkAction, InstallAction, Tag};
 
-pub fn apply(cli: Cli) -> Result<(), anyhow::Error> {
+// Not pub, only used internally
+pub(crate) fn apply_with_tags(cli: crate::Cli, mut detected_tags: std::collections::HashSet<String>) -> Result<(), anyhow::Error> {
     let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
     let search_root = user_dirs.home_dir().join(".hermitgrab");
     let yaml_files = crate::cmd_apply::find_hermit_yaml_files(&search_root);
     let mut configs = Vec::new();
     for path in &yaml_files {
-        match load_hermit_config(path.to_str().unwrap()) {
+        match crate::load_hermit_config(path.to_str().unwrap()) {
             Ok(cfg) => configs.push((path.clone(), cfg)),
             Err(e) => eprintln!("[hermitgrab] Error loading {}: {}", path.display(), e),
         }
     }
-    let user_tags: Vec<String> = cli.tags.iter().map(|t| t.to_string()).collect();
+    // Collect all profiles from all configs, lower-case profile names, error on duplicate
+    let mut all_profiles: std::collections::HashMap<String, Vec<crate::Tag>> = std::collections::HashMap::new();
+    for (_path, cfg) in &configs {
+        for (profile, tags) in &cfg.profiles {
+            let profile_lc = profile.to_lowercase();
+            if all_profiles.contains_key(&profile_lc) {
+                return Err(anyhow::anyhow!(format!("Duplicate profile '{}' found in multiple configs", profile_lc)));
+            }
+            // Lower-case all tags in profile
+            let tags_lc: Vec<crate::Tag> = tags.iter().map(|tag| match tag {
+                crate::Tag::Positive(t) => crate::Tag::Positive(t.to_lowercase()),
+                crate::Tag::Negative(t) => crate::Tag::Negative(t.to_lowercase()),
+            }).collect();
+            all_profiles.insert(profile_lc, tags_lc);
+        }
+    }
+    // Lower-case all detected tags
+    detected_tags = detected_tags.into_iter().map(|t| t.to_lowercase()).collect();
+    // Determine which profile to use
+    let profile_to_use = if let Some(profile) = &cli.profile {
+        Some(profile.to_lowercase())
+    } else if all_profiles.contains_key("default") {
+        Some("default".to_string())
+    } else {
+        None
+    };
+    // If a profile is specified or default exists, use its tags
+    if let Some(profile) = profile_to_use {
+        if let Some(profile_tags) = all_profiles.get(&profile) {
+            for tag in profile_tags {
+                match tag {
+                    crate::Tag::Positive(t) | crate::Tag::Negative(t) => {
+                        detected_tags.insert(t.clone());
+                    }
+                }
+            }
+        } else {
+            return Err(anyhow::anyhow!(format!("Profile '{}' not found in any config", profile)));
+        }
+    }
+    // Merge user-supplied tags (already handled in main.rs)
+    let mut user_tags: Vec<String> = detected_tags.into_iter().collect();
+    user_tags.sort();
+    user_tags.dedup();
+    // Print overview of active tags
+    println!("[hermitgrab] Active tags: {:?}", user_tags);
     let mut filtered_configs = Vec::new();
     for (path, cfg) in configs {
         if user_tags.is_empty() {
