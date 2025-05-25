@@ -27,7 +27,7 @@ pub(crate) fn apply_with_tags(
     Ok(())
 }
 
-fn filter_actions_by_tags(
+pub fn filter_actions_by_tags(
     actions: &[Arc<dyn Action + 'static>],
     active_tags: &BTreeSet<Tag>,
 ) -> Vec<Arc<dyn Action + 'static>> {
@@ -139,7 +139,7 @@ fn get_active_tags(
     Ok(active_tags)
 }
 
-fn topological_sort(actions: Vec<Arc<dyn Action + 'static>>) -> Vec<Arc<dyn Action + 'static>> {
+pub fn topological_sort(actions: Vec<Arc<dyn Action + 'static>>) -> Vec<Arc<dyn Action + 'static>> {
     let mut sorted = Vec::new();
     let mut seen = HashSet::new();
     fn visit(
@@ -165,7 +165,7 @@ fn topological_sort(actions: Vec<Arc<dyn Action + 'static>>) -> Vec<Arc<dyn Acti
     sorted
 }
 
-fn create_actions(
+pub fn create_actions(
     global_config: &GlobalConfig,
 ) -> Result<Vec<Arc<dyn Action + 'static>>, ApplyError> {
     let mut actions: Vec<Arc<dyn crate::Action>> = Vec::new();

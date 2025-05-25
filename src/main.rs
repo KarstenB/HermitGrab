@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 pub mod action;
 pub mod atomic_link;
 pub mod cmd_apply;
+pub mod cmd_apply_tui;
 pub mod cmd_init;
 pub mod config;
 pub mod detector;
@@ -22,6 +23,9 @@ pub use std::sync::Arc;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Run in interactive TUI mode
+    #[arg(long = "interactive", global = true)]
+    interactive: bool,
     /// Increase output verbosity
     #[arg(short, long, global = true)]
     verbose: bool,
@@ -77,7 +81,13 @@ fn main() -> Result<()> {
             crate::cmd_init::run(repo)?;
         }
         Commands::Apply => {
-            cmd_apply::apply_with_tags(cli, detected_tags, &global_config)?;
+            if cli.interactive {
+                // Only pass config and cli to TUI, let it compute active_tags and actions internally
+                return cmd_apply_tui::run_tui(&global_config, &cli)
+                    .map_err(|e| anyhow::anyhow!(e));
+            } else {
+                cmd_apply::apply_with_tags(cli, detected_tags, &global_config)?;
+            }
         }
         Commands::Status => {
             println!("[hermitgrab] Status:");
