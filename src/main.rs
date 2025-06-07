@@ -8,6 +8,7 @@ pub mod cmd_apply_tui;
 pub mod cmd_init;
 pub mod config;
 pub mod detector;
+pub mod execution_plan;
 pub mod hermitgrab_error;
 
 pub use crate::action::{Action, AtomicLinkAction, InstallAction};
@@ -67,15 +68,10 @@ enum Commands {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    // Detect built-in tags
-    let mut detected_tags = detector::detect_builtin_tags();
-    for t in &cli.tags {
-        detected_tags.insert(t.as_str().into());
-    }
     let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
     let search_root = user_dirs.home_dir().join(".hermitgrab");
     let yaml_files = crate::cmd_apply::find_hermit_yaml_files(&search_root);
-    let global_config = config::GlobalConfig::from_paths(&yaml_files)?;
+    let global_config = config::GlobalConfig::from_paths(search_root,&yaml_files)?;
     match cli.command {
         Commands::Init { repo } => {
             crate::cmd_init::run(repo)?;
@@ -86,7 +82,7 @@ fn main() -> Result<()> {
                 return cmd_apply_tui::run_tui(&global_config, &cli)
                     .map_err(|e| anyhow::anyhow!(e));
             } else {
-                cmd_apply::apply_with_tags(cli, detected_tags, &global_config)?;
+                cmd_apply::apply_with_tags(cli, &global_config)?;
             }
         }
         Commands::Status => {
@@ -96,6 +92,7 @@ fn main() -> Result<()> {
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {
                 let mut all_tags = global_config.all_tags.clone();
+                let detected_tags = detector::detect_builtin_tags();
                 all_tags.extend(detected_tags);
                 println!("All tags (including auto-detected):");
                 for t in all_tags {

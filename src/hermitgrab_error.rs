@@ -42,6 +42,8 @@ pub enum ApplyError {
     InstallSourceNotFound(String),
     #[error("The user aborted the operation")]
     UserAborted,
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 #[derive(Debug, Error)]

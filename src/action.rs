@@ -47,6 +47,8 @@ pub trait Action: Send + Sync {
 
 pub struct AtomicLinkAction {
     id: String,
+    rel_src: String,
+    rel_dst: String,
     src: PathBuf,
     dst: String,
     link_type: LinkType,
@@ -56,16 +58,30 @@ pub struct AtomicLinkAction {
 impl AtomicLinkAction {
     pub(crate) fn new(
         id: String,
+        config_dir: &PathBuf,
         src: PathBuf,
         dst: String,
         tags: Vec<RequireTag>,
         depends: Vec<String>,
         link_type: LinkType,
     ) -> Self {
+        let rel_src= src
+            .strip_prefix(config_dir)
+            .unwrap_or(&src)
+            .to_string_lossy()
+            .to_string();
+        let rel_dst = shellexpand::tilde(&dst).to_string();
+        let rel_dst = rel_dst
+            .strip_prefix(shellexpand::tilde("~/").as_ref())
+            .unwrap_or(&rel_dst)
+            .to_string();
+            
         Self {
             id,
             src,
+            rel_src,
             dst,
+            rel_dst,
             link_type,
             tags,
             depends,
@@ -75,7 +91,7 @@ impl AtomicLinkAction {
 
 impl Action for AtomicLinkAction {
     fn short_description(&self) -> String {
-        format!("Link {} -> {}", self.src.display(), self.dst)
+        format!("Link 🐚/{} -> 🏠/{}", self.rel_src, self.rel_dst)
     }
     fn long_description(&self) -> String {
         format!(
@@ -178,7 +194,7 @@ impl Action for InstallAction {
         format!("Install {}", self.name)
     }
     fn long_description(&self) -> String {
-        format!("Install {} (tags: {:?})", self.name, self.tags)
+        format!("Install {} with cmd: {:?})", self.name, self.install_cmd)
     }
     fn tags(&self) -> &[RequireTag] {
         &self.tags

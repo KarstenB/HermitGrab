@@ -3,6 +3,8 @@ use serde::Deserializer;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
+use crate::detector::detect_builtin_tags;
+use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -139,6 +141,7 @@ impl InstallEntry {
 
 #[derive(Debug)]
 pub struct GlobalConfig {
+    pub root_dir: PathBuf,
     pub subconfigs: Vec<HermitConfig>,
     pub all_profiles: BTreeMap<String, BTreeSet<Tag>>, // lowercased, deduped, error on duplicate
     pub all_tags: BTreeSet<Tag>,                       // lowercased, deduped
@@ -146,7 +149,7 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn from_paths(paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
+    pub fn from_paths(root_dir: PathBuf, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
         let mut subconfigs = Vec::new();
         let mut all_profiles = BTreeMap::new();
         let mut all_tags = BTreeSet::new();
@@ -176,11 +179,58 @@ impl GlobalConfig {
             subconfigs.push(config);
         }
         Ok(GlobalConfig {
+            root_dir,
             subconfigs,
             all_profiles,
             all_tags,
             all_sources,
         })
+    }
+
+    pub fn get_active_tags(
+        &self,
+        cli_tags: &[String],
+        cli_profile: &Option<String>,
+    ) -> Result<BTreeSet<Tag>, ApplyError> {
+        let mut detected_tags = detect_builtin_tags();
+        for t in cli_tags {
+            detected_tags.insert(Tag::from(t.as_str()));
+        }
+        let profile_to_use = self.get_profile(cli_profile)?;
+        let mut active_tags = detected_tags.clone();
+        if let Some((_, profile)) = profile_to_use {
+            if let Some(profile_tags) = self.all_profiles.get(&profile) {
+                active_tags.extend(profile_tags.iter().cloned());
+            }
+        }
+        Ok(active_tags)
+    }
+
+    pub fn get_profile(
+        &self,
+        cli_profile: &Option<String>,
+    ) -> Result<Option<(usize, String)>, ApplyError> {
+        let profiles: Vec<String> = self.all_profiles.keys().cloned().collect();
+        let profile_to_use = if let Some(profile) = &cli_profile {
+            let res = profiles
+                .iter()
+                .enumerate()
+                .find(|(_, p)| p.eq_ignore_ascii_case(profile))
+                .map(|(i, p)| (i, p.clone()));
+            if res.is_none() {
+                return Err(ApplyError::ProfileNotFound(profile.to_string()));
+            }
+            res
+        } else if self.all_profiles.contains_key("default") {
+            profiles
+                .iter()
+                .enumerate()
+                .find(|(_, p)| p.eq_ignore_ascii_case("default"))
+                .map(|(i, p)| (i, p.clone()))
+        } else {
+            None
+        };
+        Ok(profile_to_use)
     }
 }
 

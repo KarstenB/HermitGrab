@@ -1,54 +1,32 @@
-use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::config::{GlobalConfig, Tag};
+use crate::config::GlobalConfig;
+use crate::execution_plan::{ExecutionPlan, create_execution_plan};
 use crate::hermitgrab_error::{ActionError, ApplyError};
-use crate::{Action, Cli, InstallAction};
+use crate::{Action, Cli};
 
 pub(crate) fn apply_with_tags(
     cli: Cli,
-    detected_tags: BTreeSet<Tag>,
     global_config: &GlobalConfig,
 ) -> Result<(), ApplyError> {
-    let active_tags = get_active_tags(&cli, detected_tags, global_config)?;
+    let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
     println!("[hermitgrab] Active tags: {:?}", active_tags);
-    let actions = create_actions(global_config)?;
-    let filtered_actions = filter_actions_by_tags(&actions, &active_tags);
-    let sorted = topological_sort(filtered_actions);
+    let actions = create_execution_plan(global_config)?;
+    let filtered_actions = actions.filter_actions_by_tags(&active_tags);
+    let sorted = filtered_actions.sort_by_dependency();
     present_execution_plan(&sorted);
     if !cli.confirm {
         confirm_with_user()?;
     }
-    let results = execute_actions(&sorted);
+    let results = sorted.execute_actions();
     summarize(&sorted, &results, cli.verbose);
     Ok(())
 }
 
-pub fn filter_actions_by_tags(
-    actions: &[Arc<dyn Action + 'static>],
-    active_tags: &BTreeSet<Tag>,
-) -> Vec<Arc<dyn Action + 'static>> {
-    let mut filtered: Vec<Arc<dyn Action + 'static>> = Vec::new();
-    for action in actions {
-        let tags = action.tags();
-        let mut matches = true;
-        for tag in tags {
-            if !tag.matches(active_tags) {
-                matches = false;
-                break;
-            }
-        }
-        if matches {
-            filtered.push(action.clone());
-        }
-    }
-    filtered
-}
-
-fn present_execution_plan(sorted: &[Arc<dyn Action + 'static>]) {
+fn present_execution_plan(sorted: &ExecutionPlan) {
     println!("[hermitgrab] Execution plan:");
     for (i, a) in sorted.iter().enumerate() {
         println!(
@@ -73,7 +51,7 @@ fn confirm_with_user() -> Result<(), ApplyError> {
 }
 
 fn summarize(
-    actions: &[Arc<dyn Action + 'static>],
+    actions: &ExecutionPlan,
     results: &[(String, Result<(), ActionError>)],
     verbose: bool,
 ) {
@@ -105,113 +83,6 @@ fn print_action_output(action: &Arc<dyn Action>) {
             eprintln!("[stderr] {}", stderr);
         }
     }
-}
-
-fn execute_actions(sorted: &[Arc<dyn Action + 'static>]) -> Vec<(String, Result<(), ActionError>)> {
-    let mut results = Vec::new();
-    for a in sorted {
-        let res = a.execute();
-        results.push((a.short_description(), res));
-    }
-    results
-}
-
-fn get_active_tags(
-    cli: &Cli,
-    detected_tags: BTreeSet<Tag>,
-    global_config: &GlobalConfig,
-) -> Result<BTreeSet<Tag>, ApplyError> {
-    let profile_to_use = if let Some(profile) = &cli.profile {
-        Some(profile.to_lowercase())
-    } else if global_config.all_profiles.contains_key("default") {
-        Some("default".to_string())
-    } else {
-        None
-    };
-    let mut active_tags = detected_tags.clone();
-    if let Some(profile) = profile_to_use {
-        if let Some(profile_tags) = global_config.all_profiles.get(&profile) {
-            active_tags.extend(profile_tags.iter().cloned());
-        } else {
-            return Err(ApplyError::ProfileNotFound(profile));
-        }
-    }
-    Ok(active_tags)
-}
-
-pub fn topological_sort(actions: Vec<Arc<dyn Action + 'static>>) -> Vec<Arc<dyn Action + 'static>> {
-    let mut sorted = Vec::new();
-    let mut seen = HashSet::new();
-    fn visit(
-        a: &Arc<dyn Action>,
-        actions: &Vec<Arc<dyn Action>>,
-        seen: &mut HashSet<String>,
-        sorted: &mut Vec<Arc<dyn Action>>,
-    ) {
-        if seen.contains(&a.id()) {
-            return;
-        }
-        for dep in a.dependencies() {
-            if let Some(dep_a) = actions.iter().find(|x| &x.id() == dep) {
-                visit(dep_a, actions, seen, sorted);
-            }
-        }
-        seen.insert(a.id());
-        sorted.push(a.clone());
-    }
-    for a in &actions {
-        visit(a, &actions, &mut seen, &mut sorted);
-    }
-    sorted
-}
-
-pub fn create_actions(
-    global_config: &GlobalConfig,
-) -> Result<Vec<Arc<dyn Action + 'static>>, ApplyError> {
-    let mut actions: Vec<Arc<dyn crate::Action>> = Vec::new();
-    for cfg in &global_config.subconfigs {
-        let depends = &cfg.depends;
-        for file in &cfg.files {
-            let id = format!("link:{}:{}", cfg.path().display(), file.target);
-            let source = cfg
-                .path()
-                .parent()
-                .expect("File should have a directory")
-                .join(&file.source);
-            actions.push(Arc::new(crate::AtomicLinkAction::new(
-                id,
-                source,
-                file.target.clone(),
-                file.requires.clone(),
-                depends.clone(),
-                file.link,
-            )));
-        }
-        for inst in &cfg.install {
-            // Filter install actions by tags
-            let id = format!("install:{}:{}", cfg.path().display(), inst.name);
-            // Use global_config.all_sources for install_cmd
-            let install_cmd = inst
-                .source
-                .as_ref()
-                .and_then(|src| global_config.all_sources.get(&src.to_lowercase()))
-                .or_else(|| global_config.all_sources.get(&inst.name.to_lowercase()));
-            let Some(install_cmd) = install_cmd else {
-                return Err(ApplyError::InstallSourceNotFound(inst.name.clone()));
-            };
-            actions.push(Arc::new(InstallAction::new(
-                id,
-                inst.name.clone(),
-                inst.requires.clone(),
-                depends.clone(),
-                inst.check_cmd.clone(),
-                install_cmd.clone(),
-                inst.version.clone(),
-                inst.variables.clone(),
-            )));
-        }
-    }
-    Ok(actions)
 }
 
 pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
