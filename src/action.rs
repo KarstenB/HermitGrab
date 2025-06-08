@@ -171,7 +171,7 @@ impl InstallAction {
             if let Ok(output) = status {
                 if output.status.success() {
                     let action_output = ActionOutput::new(
-                        "Skipped installation because check passed".to_string(),
+                        format!("Skipped installation of {} because check passed", self.name),
                         "".to_string(),
                     );
                     *self.output.lock().expect("Expected to unlock output mutex") =

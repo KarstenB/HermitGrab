@@ -129,7 +129,7 @@ pub struct HermitConfig {
     #[serde(default)]
     pub sources: HashMap<String, String>,
     #[serde(default)]
-    pub depends: Vec<String>,
+    pub requires: Vec<RequireTag>,
     #[serde(default)]
     pub profiles: HashMap<String, BTreeSet<Tag>>,
 }
@@ -159,10 +159,13 @@ pub struct DotfileEntry {
     pub requires: BTreeSet<RequireTag>,
 }
 impl DotfileEntry {
-    pub(crate) fn get_requires(&self, provides: &[Tag]) -> BTreeSet<RequireTag> {
+    pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
-        for tag in provides {
+        for tag in cfg.provides.iter() {
             requires.insert(RequireTag::Positive(tag.0.clone()));
+        }
+        for tag in &cfg.requires {
+            requires.insert(tag.clone());
         }
         requires
     }
@@ -190,10 +193,13 @@ impl InstallEntry {
         map
     }
 
-    pub(crate) fn get_requires(&self, provides: &[Tag]) -> BTreeSet<RequireTag> {
+    pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
-        for tag in provides {
+        for tag in cfg.provides.iter() {
             requires.insert(RequireTag::Positive(tag.0.clone()));
+        }
+        for tag in &cfg.requires {
+            requires.insert(tag.clone());
         }
         requires
     }

@@ -1,5 +1,8 @@
 sources:
-  apt: echo apt-get install -y {{ name }} {{ version }} {{ bla }}
+  apt: |
+    #!/bin/bash
+    echo apt-get update
+    echo apt-get install -y {{ name }} {{ version }} {{ bla }}
   brew: brew install {{ name }}
 profiles:
   karsten:

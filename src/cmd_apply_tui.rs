@@ -508,7 +508,7 @@ fn get_total_exec_lines(app: &App, width: usize) -> usize {
                 if w % width != 0 || n == 0 {
                     n += 1;
                 }
-                std::iter::repeat(()).take(n)
+                std::iter::repeat_n((), n)
             })
             .count();
         total += lines.max(1);
@@ -528,7 +528,7 @@ fn get_exec_item_for_visual_cursor(app: &App, width: usize) -> usize {
                 if w % width != 0 || n == 0 {
                     n += 1;
                 }
-                std::iter::repeat(()).take(n)
+                std::iter::repeat_n((), n)
             })
             .count();
         let lines = lines.max(1);

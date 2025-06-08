@@ -1,27 +1,20 @@
 provides:
   - fish
+requires:
+  - os_family=unix
 
 files:
   - source: config.fish
     target: ~/.config/fish/config.fish
-    requires:
-      - -windows # Not for windows
+
 install:
   - name: fish
-    check_cmd: false
+    check_cmd: command -v fish
     source: apt
-    version: latest
     requires:
-      - fish-latest
-      - -windows # Not for windows
-    variables:
-      bla: "blubb"
+      - os=linux
   - name: fish
-    check_cmd: false
-    source: apt
-    version: 4.0
+    check_cmd: command -v fish
+    source: brew
     requires:
-      - fish-4.0
-      - -windows # Not for windows
-depends:
-  - utils/starship
+      - os=macos

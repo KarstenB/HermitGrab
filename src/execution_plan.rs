@@ -86,7 +86,7 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
 pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<Arc<dyn crate::Action>> = Vec::new();
     for cfg in &global_config.subconfigs {
-        let depends = &cfg.depends;
+        let depends = Vec::new();
         for file in &cfg.files {
             let id = format!("link:{}:{}", cfg.path().display(), file.target);
             let source = cfg
@@ -99,7 +99,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 &global_config.root_dir,
                 source,
                 file.target.clone(),
-                file.get_requires(&cfg.provides),
+                file.get_requires(cfg),
                 depends.clone(),
                 file.link,
             )));
@@ -119,7 +119,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
             actions.push(Arc::new(InstallAction::new(
                 id,
                 inst.name.clone(),
-                inst.get_requires(&cfg.provides),
+                inst.get_requires(cfg),
                 depends.clone(),
                 inst.check_cmd.clone(),
                 install_cmd.clone(),

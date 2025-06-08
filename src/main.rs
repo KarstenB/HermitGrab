@@ -81,9 +81,7 @@ fn main() -> Result<()> {
         }
         Commands::Apply => {
             if cli.interactive {
-                // Only pass config and cli to TUI, let it compute active_tags and actions internally
-                return cmd_apply_tui::run_tui(&global_config, &cli)
-                    .map_err(|e| anyhow::anyhow!(e));
+                cmd_apply_tui::run_tui(&global_config, &cli)?;
             } else {
                 cmd_apply::apply_with_tags(cli, &global_config)?;
             }
@@ -97,22 +95,22 @@ fn main() -> Result<()> {
                 let mut all_tags = global_config.all_provided_tags.clone();
                 let detected_tags = detector::detect_builtin_tags();
                 all_tags.extend(detected_tags);
-                hermitgrab_info(&format!("All tags (including auto-detected):"));
+                hermitgrab_info("All tags (including auto-detected):");
                 for t in all_tags {
-                    info(&format!("- {} ({})", t.name(), t.source()));
+                    info!("- {} ({})", t.name(), t.source());
                 }
             }
             GetCommand::Profiles => {
                 hermitgrab_info("All profiles:");
                 for (profile, tags) in &global_config.all_profiles {
-                    info(&format!(
+                    info!(
                         "- {}: {}",
                         profile,
                         tags.iter()
                             .map(|t| t.to_string())
                             .collect::<Vec<_>>()
                             .join(", ")
-                    ));
+                    );
                 }
             }
         },
