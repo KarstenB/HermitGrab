@@ -47,6 +47,9 @@ impl App {
     ) -> Result<(), ApplyError> {
         if let Some(profile_tags) = global_config.all_profiles.get(&self.profiles[idx]) {
             for (tag, checked) in &mut self.tags {
+                if tag.is_detected() {
+                    continue;
+                }
                 *checked = profile_tags.contains(tag);
             }
         }
@@ -104,11 +107,17 @@ impl App {
 pub(crate) fn run_tui(global_config: &GlobalConfig, cli: &crate::Cli) -> Result<(), ApplyError> {
     // Collect all profiles and tags from GlobalConfig
     let actions = create_execution_plan(global_config)?;
-    let all_tags = global_config
+    let mut all_tags = global_config
         .all_provided_tags
         .iter()
         .map(|t| (t.clone(), true))
         .collect::<Vec<_>>();
+    all_tags.extend(
+        global_config
+            .all_detected_tags
+            .iter()
+            .map(|t| (t.clone(), true)),
+    );
     let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
     let profile_to_use = global_config.get_profile(&cli.profile)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);

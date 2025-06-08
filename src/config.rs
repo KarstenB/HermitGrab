@@ -42,11 +42,14 @@ impl Tag {
     pub fn source(&self) -> &Source {
         &self.1
     }
+
+    pub(crate) fn is_detected(&self) -> bool {
+        matches!(self.1, Source::Detector(_) | Source::BuiltInDetector)
+    }
 }
 impl Hash for Tag {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
-        self.1.hash(state);
     }
 }
 impl PartialEq for Tag {
@@ -267,7 +270,12 @@ impl GlobalConfig {
             for t in tag {
                 let t = t.trim();
                 if !t.is_empty() {
-                    active_tags.insert(Tag::new(t, Source::CommandLine));
+                    let cli_tag = Tag::new(t, Source::CommandLine);
+                    if self.all_provided_tags.contains(&cli_tag) {
+                        active_tags.insert(cli_tag);
+                    } else {
+                        return Err(ApplyError::TagNotFound(t.to_string()));
+                    }
                 }
             }
         }

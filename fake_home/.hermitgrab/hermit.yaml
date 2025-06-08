@@ -7,5 +7,11 @@ sources:
 profiles:
   karsten:
     - fish
-    - fish-latest
     - starship
+  default:
+    - fish
+  work-rust:
+    - fish
+    - starship
+    - git
+    - rust

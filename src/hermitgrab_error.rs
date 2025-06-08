@@ -44,6 +44,8 @@ pub enum ApplyError {
     UserAborted,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error("Failed to find tag: {0}")]
+    TagNotFound(String),
 }
 
 #[derive(Debug, Error)]
