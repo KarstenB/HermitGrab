@@ -1,8 +1,9 @@
-use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crossterm::style::{Stylize, Color, Attribute};
+
+use crate::common_cli::{self, error, hermitgrab_info, success};
 use crate::config::GlobalConfig;
 use crate::execution_plan::{ExecutionPlan, create_execution_plan};
 use crate::hermitgrab_error::{ActionError, ApplyError};
@@ -13,7 +14,12 @@ pub(crate) fn apply_with_tags(
     global_config: &GlobalConfig,
 ) -> Result<(), ApplyError> {
     let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
-    println!("[hermitgrab] Active tags: {:?}", active_tags);
+    let active_tags_str = active_tags
+        .iter()
+        .map(|t| t.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    hermitgrab_info(&format!("Active tags: {}", active_tags_str));
     let actions = create_execution_plan(global_config)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
     let sorted = filtered_actions.sort_by_dependency();
@@ -27,24 +33,22 @@ pub(crate) fn apply_with_tags(
 }
 
 fn present_execution_plan(sorted: &ExecutionPlan) {
-    println!("[hermitgrab] Execution plan:");
-    for (i, a) in sorted.iter().enumerate() {
-        println!(
-            "{}. {} [tags: {:?}]",
-            i + 1,
-            a.short_description(),
-            a.tags()
-        );
+    hermitgrab_info("Execution plan:");
+    for a in sorted.iter() {
+        hermitgrab_info(&format!(
+            "  [ ] {}",
+            a.short_description()
+        ));
     }
 }
 
 fn confirm_with_user() -> Result<(), ApplyError> {
-    print!("Proceed? [y/N]: ");
+    print!("{} Proceed? [y/N]: ", "[hermitgrab]".stylize().with(Color::Cyan).attribute(Attribute::Bold));
     std::io::stdout().flush().unwrap();
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
     if !matches!(input.to_lowercase().trim(), "y" | "yes") {
-        println!("Aborted.");
+        error("Aborted.");
         return Err(ApplyError::UserAborted);
     }
     Ok(())
@@ -55,17 +59,17 @@ fn summarize(
     results: &[(String, Result<(), ActionError>)],
     verbose: bool,
 ) {
-    println!("[hermitgrab] Summary:");
+    hermitgrab_info("Summary:");
     for (action, (desc, res)) in actions.iter().zip(results) {
         match res {
             Ok(_) => {
-                println!("[ok] {}", desc);
+                success(desc);
                 if verbose {
                     print_action_output(action);
                 }
             }
             Err(e) => {
-                println!("[err] {}: {}", desc, e);
+                error(&format!("{}: {}", desc, e));
                 print_action_output(action);
             }
         }
@@ -77,29 +81,11 @@ fn print_action_output(action: &Arc<dyn Action>) {
         let stdout = output.standard_output().trim();
         let stderr = output.error_output().trim();
         if !stdout.is_empty() {
-            println!("[stdout] {}", stdout);
+            common_cli::stdout(stdout);
         }
         if !stderr.is_empty() {
-            eprintln!("[stderr] {}", stderr);
+            common_cli::stderr(stderr);
         }
     }
 }
 
-pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
-    let mut result = Vec::new();
-    if root.is_file() && root.file_name().is_some_and(|f| f == "hermit.yaml") {
-        result.push(root.to_path_buf());
-    } else if root.is_dir() {
-        if let Ok(entries) = fs::read_dir(root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    result.extend(find_hermit_yaml_files(&path));
-                } else if path.file_name().is_some_and(|f| f == "hermit.yaml") {
-                    result.push(path);
-                }
-            }
-        }
-    }
-    result
-}

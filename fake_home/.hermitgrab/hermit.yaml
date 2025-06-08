@@ -2,6 +2,7 @@ sources:
   apt: echo apt-get install -y {{ name }} {{ version }} {{ bla }}
   brew: brew install {{ name }}
 profiles:
-  default:
+  karsten:
+    - fish
     - fish-latest
     - starship

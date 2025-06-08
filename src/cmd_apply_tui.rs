@@ -104,6 +104,11 @@ impl App {
 pub(crate) fn run_tui(global_config: &GlobalConfig, cli: &crate::Cli) -> Result<(), ApplyError> {
     // Collect all profiles and tags from GlobalConfig
     let actions = create_execution_plan(global_config)?;
+    let all_tags = global_config
+        .all_provided_tags
+        .iter()
+        .map(|t| (t.clone(), true))
+        .collect::<Vec<_>>();
     let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
     let profile_to_use = global_config.get_profile(&cli.profile)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
@@ -128,7 +133,10 @@ pub(crate) fn run_tui(global_config: &GlobalConfig, cli: &crate::Cli) -> Result<
             .keys()
             .cloned()
             .collect::<Vec<_>>(),
-        tags: active_tags.into_iter().map(|t| (t, false)).collect(),
+        tags: all_tags.into_iter().map(|(t, _)| {
+            let active = active_tags.contains(&t);
+            (t, active)
+        }).collect(),
         execution_plan: sorted
             .iter()
             .map(|a| (a.short_description(), false))

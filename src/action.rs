@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -5,7 +6,7 @@ use std::sync::Mutex;
 
 use crate::LinkType;
 use crate::RequireTag;
-use crate::atomic_link;
+use crate::links_files;
 use crate::hermitgrab_error::ActionError;
 use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
@@ -45,7 +46,7 @@ pub trait Action: Send + Sync {
     fn execute(&self) -> Result<(), ActionError>;
 }
 
-pub struct AtomicLinkAction {
+pub struct LinkAction {
     id: String,
     rel_src: String,
     rel_dst: String,
@@ -55,13 +56,13 @@ pub struct AtomicLinkAction {
     tags: Vec<RequireTag>,
     depends: Vec<String>,
 }
-impl AtomicLinkAction {
+impl LinkAction {
     pub(crate) fn new(
         id: String,
         config_dir: &PathBuf,
         src: PathBuf,
         dst: String,
-        tags: Vec<RequireTag>,
+        tags: BTreeSet<RequireTag>,
         depends: Vec<String>,
         link_type: LinkType,
     ) -> Self {
@@ -83,15 +84,20 @@ impl AtomicLinkAction {
             dst,
             rel_dst,
             link_type,
-            tags,
+            tags: tags.into_iter().collect(),
             depends,
         }
     }
 }
 
-impl Action for AtomicLinkAction {
+impl Action for LinkAction {
     fn short_description(&self) -> String {
-        format!("Link 🐚/{} -> 🏠/{}", self.rel_src, self.rel_dst)
+        let link_type_str = match self.link_type {
+            LinkType::Soft => "Symlink",
+            LinkType::Hard => "Hardlink",
+            LinkType::Copy => "Copy",
+        };
+        format!("{link_type_str} .hermitgrab/{} -> ~/{}", self.rel_src, self.rel_dst)
     }
     fn long_description(&self) -> String {
         format!(
@@ -112,7 +118,7 @@ impl Action for AtomicLinkAction {
     }
     fn execute(&self) -> Result<(), ActionError> {
         let dst_str = shellexpand::tilde(&self.dst).to_string();
-        atomic_link::atomic_symlink(&self.src, dst_str, self.link_type)
+        links_files::link_files(&self.src, dst_str, self.link_type)
             .map_err(LinkActionError::AtomicLinkError)?;
         Ok(())
     }
@@ -134,7 +140,7 @@ impl InstallAction {
     pub fn new(
         id: String,
         name: String,
-        tags: Vec<RequireTag>,
+        tags: BTreeSet<RequireTag>,
         depends: Vec<String>,
         check_cmd: Option<String>,
         install_cmd: String,
@@ -144,7 +150,7 @@ impl InstallAction {
         Self {
             id,
             name,
-            tags,
+            tags: tags.into_iter().collect(),
             depends,
             check_cmd,
             install_cmd,

@@ -1,8 +1,4 @@
-// Built-in detectors for HermitGrab
-// Detects: hostname, architecture (docker style), OS, OS version (numeric), OS version nickname
-
 use std::collections::BTreeSet;
-
 use crate::config::Tag;
 
 pub fn detect_builtin_tags() -> BTreeSet<Tag> {
@@ -13,10 +9,9 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     }
     let info = os_info::get();
 
-    // Print full information:
-    println!("OS information: {info}");
-
-    tags.insert(format!("os_type={}", info.os_type().to_string().replace(' ', "")).into());
+    tags.insert(format!("os_family={}", std::env::consts::FAMILY).into());
+    tags.insert(format!("os={}", std::env::consts::OS).into());
+    tags.insert(format!("arch={}", std::env::consts::ARCH).into());
     tags.insert(format!("os_version={}", info.version()).into());
     if let Some(edition) = info.edition() {
         tags.insert(format!("os_edition={}", edition).into());
@@ -24,10 +19,11 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     if let Some(codename) = info.codename() {
         tags.insert(format!("os_codename={}", codename).into());
     }
-    tags.insert(format!("os_bitness={}", info.bitness()).into());
-    if let Some(architecture) = info.architecture() {
-        tags.insert(format!("arch={}", architecture).into());
-    }
+    match info.bitness() {
+        os_info::Bitness::X32 => tags.insert("os_bitness=32".into()),
+        os_info::Bitness::X64 => tags.insert("os_bitness=64".into()),
+        _ => false,
+    };
     tags
 }
 

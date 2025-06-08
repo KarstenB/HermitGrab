@@ -39,7 +39,7 @@ impl<'de> Deserialize<'de> for Tag {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum RequireTag {
     Positive(String),
     Negative(String),
@@ -113,7 +113,16 @@ pub struct DotfileEntry {
     #[serde(default)]
     pub link: LinkType,
     #[serde(default)]
-    pub requires: Vec<RequireTag>,
+    pub requires: BTreeSet<RequireTag>,
+}
+impl DotfileEntry {
+    pub(crate) fn get_requires(&self, provides: &[Tag]) -> BTreeSet<RequireTag> {
+        let mut requires = self.requires.clone();
+        for tag in provides {
+            requires.insert(RequireTag::Positive(tag.0.clone()));
+        }
+        requires
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -123,7 +132,7 @@ pub struct InstallEntry {
     pub source: Option<String>,
     pub version: Option<String>,
     #[serde(default)]
-    pub requires: Vec<RequireTag>,
+    pub requires: BTreeSet<RequireTag>,
     #[serde(default)]
     pub variables: std::collections::HashMap<String, String>,
 }
@@ -137,27 +146,37 @@ impl InstallEntry {
         }
         map
     }
+
+    pub(crate) fn get_requires(&self, provides: &[Tag]) -> BTreeSet<RequireTag> {
+        let mut requires = self.requires.clone();
+        for tag in provides {
+            requires.insert(RequireTag::Positive(tag.0.clone()));
+        }
+        requires
+    }
 }
 
 #[derive(Debug)]
 pub struct GlobalConfig {
     pub root_dir: PathBuf,
     pub subconfigs: Vec<HermitConfig>,
-    pub all_profiles: BTreeMap<String, BTreeSet<Tag>>, // lowercased, deduped, error on duplicate
-    pub all_tags: BTreeSet<Tag>,                       // lowercased, deduped
-    pub all_sources: BTreeMap<String, String>,         // last one wins
+    pub all_profiles: BTreeMap<String, BTreeSet<Tag>>,
+    pub all_provided_tags: BTreeSet<Tag>,
+    pub all_detected_tags: BTreeSet<Tag>,
+    pub all_sources: BTreeMap<String, String>,
 }
 
 impl GlobalConfig {
+    
     pub fn from_paths(root_dir: PathBuf, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
         let mut subconfigs = Vec::new();
         let mut all_profiles = BTreeMap::new();
-        let mut all_tags = BTreeSet::new();
+        let mut all_provided_tags = BTreeSet::new();
         let mut all_sources = BTreeMap::new();
         for path in paths {
             let config = load_hermit_config(path)?;
             for tag in &config.provides {
-                all_tags.insert(tag.clone());
+                all_provided_tags.insert(tag.clone());
             }
             for (k, v) in &config.sources {
                 if all_sources.contains_key(&k.to_lowercase()) {
@@ -178,11 +197,13 @@ impl GlobalConfig {
             }
             subconfigs.push(config);
         }
+        let all_detected_tags = detect_builtin_tags();
         Ok(GlobalConfig {
             root_dir,
             subconfigs,
             all_profiles,
-            all_tags,
+            all_provided_tags,
+            all_detected_tags,
             all_sources,
         })
     }
@@ -192,16 +213,24 @@ impl GlobalConfig {
         cli_tags: &[String],
         cli_profile: &Option<String>,
     ) -> Result<BTreeSet<Tag>, ApplyError> {
-        let mut detected_tags = detect_builtin_tags();
-        for t in cli_tags {
-            detected_tags.insert(Tag::from(t.as_str()));
-        }
-        let profile_to_use = self.get_profile(cli_profile)?;
-        let mut active_tags = detected_tags.clone();
-        if let Some((_, profile)) = profile_to_use {
-            if let Some(profile_tags) = self.all_profiles.get(&profile) {
-                active_tags.extend(profile_tags.iter().cloned());
+        let mut active_tags = self.all_detected_tags.clone();
+        for tag in cli_tags {
+            let tag = tag.split(',');
+            for t in tag {
+                let t = t.trim();
+                if !t.is_empty() {
+                    active_tags.insert(Tag::new(t));
+                }
             }
+        }
+        let profile_to_use = self.all_profiles.get(
+            &cli_profile
+                .as_deref()
+                .map(|x| x.to_lowercase())
+                .unwrap_or("default".to_string()),
+        );
+        if let Some(profile_tags) = profile_to_use {
+            active_tags.extend(profile_tags.iter().cloned());
         }
         Ok(active_tags)
     }
@@ -241,4 +270,24 @@ pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, Confi
         .map_err(|e| ConfigLoadError::SerdeYmlError(e, path.as_ref().to_path_buf()))?;
     config.path = path.as_ref().to_path_buf();
     Ok(config)
+}
+
+
+pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    if root.is_file() && root.file_name().is_some_and(|f| f == "hermit.yaml") {
+        result.push(root.to_path_buf());
+    } else if root.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    result.extend(find_hermit_yaml_files(&path));
+                } else if path.file_name().is_some_and(|f| f == "hermit.yaml") {
+                    result.push(path);
+                }
+            }
+        }
+    }
+    result
 }

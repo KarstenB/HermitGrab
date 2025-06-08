@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 pub mod action;
-pub mod atomic_link;
+pub mod links_files;
 pub mod cmd_apply;
 pub mod cmd_apply_tui;
 pub mod cmd_init;
@@ -10,9 +10,12 @@ pub mod config;
 pub mod detector;
 pub mod execution_plan;
 pub mod hermitgrab_error;
+pub mod common_cli;
 
-pub use crate::action::{Action, AtomicLinkAction, InstallAction};
+pub use crate::action::{Action, LinkAction, InstallAction};
 pub use crate::cmd_init::run as init_command;
+use crate::common_cli::{hermitgrab_info, info};
+use crate::config::find_hermit_yaml_files;
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
 pub use crate::hermitgrab_error::AtomicLinkError;
 pub use std::collections::HashSet;
@@ -70,7 +73,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
     let search_root = user_dirs.home_dir().join(".hermitgrab");
-    let yaml_files = crate::cmd_apply::find_hermit_yaml_files(&search_root);
+    let yaml_files = find_hermit_yaml_files(&search_root);
     let global_config = config::GlobalConfig::from_paths(search_root,&yaml_files)?;
     match cli.command {
         Commands::Init { repo } => {
@@ -86,30 +89,30 @@ fn main() -> Result<()> {
             }
         }
         Commands::Status => {
-            println!("[hermitgrab] Status:");
+            hermitgrab_info("Status:");
             // TODO: Implement status reporting
         }
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {
-                let mut all_tags = global_config.all_tags.clone();
+                let mut all_tags = global_config.all_provided_tags.clone();
                 let detected_tags = detector::detect_builtin_tags();
                 all_tags.extend(detected_tags);
-                println!("All tags (including auto-detected):");
+                hermitgrab_info(&format!("All tags (including auto-detected):"));
                 for t in all_tags {
-                    println!("- {}", t);
+                    info(&format!("- {}", t));
                 }
             }
             GetCommand::Profiles => {
-                println!("All profiles:");
+                hermitgrab_info("All profiles:");
                 for (profile, tags) in &global_config.all_profiles {
-                    println!(
+                    info(&format!(
                         "- {}: {}",
                         profile,
                         tags.iter()
                             .map(|t| t.to_string())
                             .collect::<Vec<_>>()
                             .join(", ")
-                    );
+                    ));
                 }
             }
         },

@@ -94,12 +94,12 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 .parent()
                 .expect("File should have a directory")
                 .join(&file.source);
-            actions.push(Arc::new(crate::AtomicLinkAction::new(
+            actions.push(Arc::new(crate::LinkAction::new(
                 id,
                 &global_config.root_dir,
                 source,
                 file.target.clone(),
-                file.requires.clone(),
+                file.get_requires(&cfg.provides),
                 depends.clone(),
                 file.link,
             )));
@@ -119,7 +119,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
             actions.push(Arc::new(InstallAction::new(
                 id,
                 inst.name.clone(),
-                inst.requires.clone(),
+                inst.get_requires(&cfg.provides),
                 depends.clone(),
                 inst.check_cmd.clone(),
                 install_cmd.clone(),
