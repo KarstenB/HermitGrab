@@ -6,10 +6,10 @@ use std::sync::Mutex;
 
 use crate::LinkType;
 use crate::RequireTag;
-use crate::links_files;
 use crate::hermitgrab_error::ActionError;
 use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
+use crate::links_files;
 use handlebars::Handlebars;
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl LinkAction {
         depends: Vec<String>,
         link_type: LinkType,
     ) -> Self {
-        let rel_src= src
+        let rel_src = src
             .strip_prefix(config_dir)
             .unwrap_or(&src)
             .to_string_lossy()
@@ -76,7 +76,7 @@ impl LinkAction {
             .strip_prefix(shellexpand::tilde("~/").as_ref())
             .unwrap_or(&rel_dst)
             .to_string();
-            
+
         Self {
             id,
             src,
@@ -97,7 +97,10 @@ impl Action for LinkAction {
             LinkType::Hard => "Hardlink",
             LinkType::Copy => "Copy",
         };
-        format!("{link_type_str} .hermitgrab/{} -> ~/{}", self.rel_src, self.rel_dst)
+        format!(
+            "{link_type_str} .hermitgrab/{} -> ~/{}",
+            self.rel_src, self.rel_dst
+        )
     }
     fn long_description(&self) -> String {
         format!(

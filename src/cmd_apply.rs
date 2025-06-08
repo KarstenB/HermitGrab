@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use crossterm::style::{Stylize, Color, Attribute};
+use crossterm::style::{Attribute, Color, Stylize};
 
 use crate::common_cli::{self, error, hermitgrab_info, success};
 use crate::config::GlobalConfig;
@@ -9,10 +9,7 @@ use crate::execution_plan::{ExecutionPlan, create_execution_plan};
 use crate::hermitgrab_error::{ActionError, ApplyError};
 use crate::{Action, Cli};
 
-pub(crate) fn apply_with_tags(
-    cli: Cli,
-    global_config: &GlobalConfig,
-) -> Result<(), ApplyError> {
+pub(crate) fn apply_with_tags(cli: Cli, global_config: &GlobalConfig) -> Result<(), ApplyError> {
     let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
     let active_tags_str = active_tags
         .iter()
@@ -35,15 +32,18 @@ pub(crate) fn apply_with_tags(
 fn present_execution_plan(sorted: &ExecutionPlan) {
     hermitgrab_info("Execution plan:");
     for a in sorted.iter() {
-        hermitgrab_info(&format!(
-            "  [ ] {}",
-            a.short_description()
-        ));
+        hermitgrab_info(&format!("  [ ] {}", a.short_description()));
     }
 }
 
 fn confirm_with_user() -> Result<(), ApplyError> {
-    print!("{} Proceed? [y/N]: ", "[hermitgrab]".stylize().with(Color::Cyan).attribute(Attribute::Bold));
+    print!(
+        "{} Proceed? [y/N]: ",
+        "[hermitgrab]"
+            .stylize()
+            .with(Color::Cyan)
+            .attribute(Attribute::Bold)
+    );
     std::io::stdout().flush().unwrap();
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
@@ -88,4 +88,3 @@ fn print_action_output(action: &Arc<dyn Action>) {
         }
     }
 }
-

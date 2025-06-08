@@ -46,7 +46,7 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
         }
         crate::LinkType::Copy => {
             fs::copy(src, dst)?;
-        },
+        }
     }
     Ok(())
 }

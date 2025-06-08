@@ -2,17 +2,17 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 pub mod action;
-pub mod links_files;
 pub mod cmd_apply;
 pub mod cmd_apply_tui;
 pub mod cmd_init;
+pub mod common_cli;
 pub mod config;
 pub mod detector;
 pub mod execution_plan;
 pub mod hermitgrab_error;
-pub mod common_cli;
+pub mod links_files;
 
-pub use crate::action::{Action, LinkAction, InstallAction};
+pub use crate::action::{Action, InstallAction, LinkAction};
 pub use crate::cmd_init::run as init_command;
 use crate::common_cli::{hermitgrab_info, info};
 use crate::config::find_hermit_yaml_files;
@@ -28,18 +28,18 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
     /// Run in interactive TUI mode
-    #[arg(long = "interactive", global = true)]
+    #[arg(short = 'i', long, global = true)]
     interactive: bool,
     /// Increase output verbosity
-    #[arg(short, long, global = true)]
+    #[arg(short = 'v', long, global = true)]
     verbose: bool,
     #[arg(short = 'y', long, global = true)]
     confirm: bool,
-    /// Only include actions matching these tags (can be specified multiple times)
-    #[arg(long = "tag", value_name = "TAG", num_args = 0.., global = true)]
+    /// Include actions matching these tags (can be specified multiple times)
+    #[arg(short='t', long = "tag", value_name = "TAG", num_args = 0.., global = true)]
     tags: Vec<String>,
-    /// Use a named profile (collects tags from all configs)
-    #[arg(long = "profile", value_name = "PROFILE", global = true)]
+    /// Use a named profile which is a set of tags
+    #[arg(short = 'p', long, value_name = "PROFILE", global = true)]
     profile: Option<String>,
 }
 
@@ -74,7 +74,7 @@ fn main() -> Result<()> {
     let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
     let search_root = user_dirs.home_dir().join(".hermitgrab");
     let yaml_files = find_hermit_yaml_files(&search_root);
-    let global_config = config::GlobalConfig::from_paths(search_root,&yaml_files)?;
+    let global_config = config::GlobalConfig::from_paths(search_root, &yaml_files)?;
     match cli.command {
         Commands::Init { repo } => {
             crate::cmd_init::run(repo)?;
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
                 all_tags.extend(detected_tags);
                 hermitgrab_info(&format!("All tags (including auto-detected):"));
                 for t in all_tags {
-                    info(&format!("- {}", t));
+                    info(&format!("- {} ({})", t.name(), t.source()));
                 }
             }
             GetCommand::Profiles => {

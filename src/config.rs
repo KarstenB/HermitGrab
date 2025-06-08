@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use serde::Deserializer;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::Display;
+use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
 use crate::detector::detect_builtin_tags;
@@ -8,34 +10,75 @@ use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Tag(String);
-impl Tag {
-    pub fn new(tag: &str) -> Self {
-        Tag(tag.to_lowercase())
+pub enum Source {
+    Unknown,
+    CommandLine,
+    Detector(String),
+    BuiltInDetector,
+    Config,
+}
+impl Display for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Source::Unknown => write!(f, "unknown"),
+            Source::CommandLine => write!(f, "command line"),
+            Source::Detector(name) => write!(f, "detector: {}", name),
+            Source::BuiltInDetector => write!(f, "built-in detector"),
+            Source::Config => write!(f, "config"),
+        }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Tag(String, Source);
+impl Tag {
+    pub fn new(tag: &str, source: Source) -> Self {
+        Tag(tag.to_lowercase(), source)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+    pub fn source(&self) -> &Source {
+        &self.1
+    }
+}
+impl Hash for Tag {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+    }
+}
+impl PartialEq for Tag {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for Tag {}
+impl PartialOrd for Tag {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Tag {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
 impl std::fmt::Display for Tag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
-impl From<String> for Tag {
-    fn from(tag: String) -> Self {
-        Tag(tag.to_lowercase())
-    }
-}
-impl From<&str> for Tag {
-    fn from(tag: &str) -> Self {
-        Tag(tag.to_lowercase())
-    }
-}
+
 impl<'de> Deserialize<'de> for Tag {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(Tag::new(&s))
+        Ok(Tag::new(&s, Source::Config))
     }
 }
 
@@ -48,8 +91,8 @@ pub enum RequireTag {
 impl RequireTag {
     pub fn matches(&self, tags: &BTreeSet<Tag>) -> bool {
         match self {
-            RequireTag::Positive(tag) => tags.contains(&Tag::new(tag)),
-            RequireTag::Negative(tag) => !tags.contains(&Tag::new(tag)),
+            RequireTag::Positive(tag) => tags.contains(&Tag::new(tag, Source::Unknown)),
+            RequireTag::Negative(tag) => !tags.contains(&Tag::new(tag, Source::Unknown)),
         }
     }
 }
@@ -167,7 +210,6 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    
     pub fn from_paths(root_dir: PathBuf, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
         let mut subconfigs = Vec::new();
         let mut all_profiles = BTreeMap::new();
@@ -219,7 +261,7 @@ impl GlobalConfig {
             for t in tag {
                 let t = t.trim();
                 if !t.is_empty() {
-                    active_tags.insert(Tag::new(t));
+                    active_tags.insert(Tag::new(t, Source::CommandLine));
                 }
             }
         }
@@ -271,7 +313,6 @@ pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, Confi
     config.path = path.as_ref().to_path_buf();
     Ok(config)
 }
-
 
 pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();

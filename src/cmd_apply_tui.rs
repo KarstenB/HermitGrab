@@ -133,10 +133,13 @@ pub(crate) fn run_tui(global_config: &GlobalConfig, cli: &crate::Cli) -> Result<
             .keys()
             .cloned()
             .collect::<Vec<_>>(),
-        tags: all_tags.into_iter().map(|(t, _)| {
-            let active = active_tags.contains(&t);
-            (t, active)
-        }).collect(),
+        tags: all_tags
+            .into_iter()
+            .map(|(t, _)| {
+                let active = active_tags.contains(&t);
+                (t, active)
+            })
+            .collect(),
         execution_plan: sorted
             .iter()
             .map(|a| (a.short_description(), false))
