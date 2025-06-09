@@ -73,3 +73,17 @@ pub enum InstallActionError {
     #[error("Failed to launch install command: {0} due to IO error: {1}")]
     CommandFailedLaunch(String, std::io::Error),
 }
+
+#[derive(Debug, Error)]
+pub enum DiscoverError {
+    #[error(transparent)]
+    GitError(#[from] git2::Error),
+    #[error(transparent)]
+    OctocrabError(#[from] octocrab::Error),
+    #[error("No Git clone URL in Github response for repository: {0}")]
+    NoGitCloneUrl(String),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+}

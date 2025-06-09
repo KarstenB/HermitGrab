@@ -13,7 +13,6 @@ pub mod hermitgrab_error;
 pub mod links_files;
 
 pub use crate::action::{Action, InstallAction, LinkAction};
-pub use crate::cmd_init::run as init_command;
 use crate::common_cli::{hermitgrab_info, info};
 use crate::config::find_hermit_yaml_files;
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
@@ -52,11 +51,28 @@ enum GetCommand {
 }
 
 #[derive(Subcommand)]
-enum Commands {
-    /// Clone a dotfiles repo from GitHub
-    Init {
-        /// GitHub repository URL
+enum InitCommand {
+    /// Clone a dotfiles repo from a given URL
+    Clone {
+        /// Git repository URL
         repo: String,
+    },
+    /// Discover dotfiles repo on GitHub (with authentication)
+    Discover {
+        /// Create the repo if not found
+        #[arg(long)]
+        create: bool,
+    },
+    /// Create an empty local dotfiles repo
+    Create,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Manage dotfiles repo initialization
+    Init {
+        #[command(subcommand)]
+        init_command: InitCommand,
     },
     /// Install applications and link/copy dotfiles
     Apply,
@@ -69,16 +85,27 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
+    simple_logger::init_with_env().unwrap();
     let cli = Cli::parse();
     let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
     let search_root = user_dirs.home_dir().join(".hermitgrab");
     let yaml_files = find_hermit_yaml_files(&search_root);
     let global_config = config::GlobalConfig::from_paths(search_root, &yaml_files)?;
     match cli.command {
-        Commands::Init { repo } => {
-            crate::cmd_init::run(repo)?;
-        }
+        Commands::Init { init_command } => match init_command {
+            InitCommand::Clone { repo } => {
+                let pat = std::env::var("HERMITGRAB_GITHUB_TOKEN");
+                crate::cmd_init::clone_or_update_repo(repo, pat.ok().as_deref())?;
+            }
+            InitCommand::Discover { create } => {
+                crate::cmd_init::discover_repo(create).await?;
+            }
+            InitCommand::Create => {
+                crate::cmd_init::create_local_repo()?;
+            }
+        },
         Commands::Apply => {
             if cli.interactive {
                 cmd_apply_tui::run_tui(&global_config, &cli)?;
