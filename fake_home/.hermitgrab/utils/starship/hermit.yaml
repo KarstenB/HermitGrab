@@ -5,9 +5,6 @@ files:
   - source: starship.toml
     target: ~/.config/starship.toml
 install:
-  - name: starship
+  - name: starship/starship
     check_cmd: starship --version
-    source: cargo_binstall
-    version: latest
-sources:
-  cargo_binstall: echo cargo binstall -y {{ name }}
+    source: ubi

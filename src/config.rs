@@ -219,7 +219,7 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn from_paths(root_dir: PathBuf, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
+    pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
         let mut subconfigs = Vec::new();
         let mut all_profiles = BTreeMap::new();
         let mut all_provided_tags = BTreeSet::new();
@@ -250,7 +250,7 @@ impl GlobalConfig {
         }
         let all_detected_tags = detect_builtin_tags();
         Ok(GlobalConfig {
-            root_dir,
+            root_dir: root_dir.to_path_buf(),
             subconfigs,
             all_profiles,
             all_provided_tags,

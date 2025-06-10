@@ -28,6 +28,12 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
         //TODO: Create a backup of the existing symlink/file to support rollback
         fs::remove_file(dst)?;
     }
+    let dst_parent = dst.parent();
+    if let Some(dst_parent) = dst_parent {
+        if !dst_parent.exists() {
+            fs::create_dir_all(dst_parent)?;
+        }
+    }
     match link_type {
         crate::LinkType::Soft => {
             #[cfg(unix)]

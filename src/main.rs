@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use directories::UserDirs;
 
 pub mod action;
 pub mod cmd_apply;
@@ -18,7 +19,9 @@ use crate::config::find_hermit_yaml_files;
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
 pub use crate::hermitgrab_error::AtomicLinkError;
 pub use std::collections::HashSet;
+use std::path::PathBuf;
 pub use std::sync::Arc;
+use std::sync::OnceLock;
 
 #[derive(Parser)]
 #[command(name = "hermitgrab")]
@@ -27,19 +30,35 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
     /// Run in interactive TUI mode
-    #[arg(short = 'i', long, global = true)]
+    #[arg(short = 'i', env = "HERMIT_INTERACTIVE", global = true)]
     interactive: bool,
     /// Increase output verbosity
-    #[arg(short = 'v', long, global = true)]
+    #[arg(short = 'v', long, env = "HERMIT_VERBOSE", global = true)]
     verbose: bool,
-    #[arg(short = 'y', long, global = true)]
+    #[arg(short = 'y', long, env = "HERMIT_CONFIRM", global = true)]
     confirm: bool,
     /// Include actions matching these tags (can be specified multiple times)
-    #[arg(short='t', long = "tag", value_name = "TAG", num_args = 0.., global = true)]
+    #[arg(short='t', long = "tag", env="HERMIT_TAGS", value_name = "TAG", num_args = 0.., global = true)]
     tags: Vec<String>,
     /// Use a named profile which is a set of tags
-    #[arg(short = 'p', long, value_name = "PROFILE", global = true)]
+    #[arg(
+        short = 'p',
+        long,
+        env = "HERMIT_PROFILE",
+        value_name = "PROFILE",
+        global = true
+    )]
     profile: Option<String>,
+    /// Path to the hermitgrab config directory
+    /// If not set, defaults to ~/.hermitgrab
+    #[arg(
+        short = 'c',
+        long,
+        env = "HERMIT_DIR",
+        global = true,
+        value_name = "PATH"
+    )]
+    hermit_dir: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -85,13 +104,34 @@ enum Commands {
     },
 }
 
+static SEARCH_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
+    if let Some(path) = cli_path {
+        hermitgrab_info!("Using hermit directory from CLI: {}", path.display());
+        return path.clone();
+    }
+    let user_dirs = UserDirs::new().expect("Could not get user directories");
+    let dotfiles_dir = user_dirs.home_dir().join(".hermitgrab");
+    hermitgrab_info!(
+        "Using hermit directory from user dirs: {}",
+        dotfiles_dir.display()
+    );
+    dotfiles_dir
+}
+pub fn hermit_dir() -> PathBuf {
+    SEARCH_ROOT
+        .get()
+        .expect("Hermit directory not set")
+        .to_path_buf()
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    simple_logger::init_with_env().unwrap();
+    // simple_logger::init_with_env().unwrap();
     let cli = Cli::parse();
-    let user_dirs = directories::UserDirs::new().expect("Could not get user directories");
-    let search_root = user_dirs.home_dir().join(".hermitgrab");
-    let yaml_files = find_hermit_yaml_files(&search_root);
+    let search_root = SEARCH_ROOT.get_or_init(|| init_hermit_dir(&cli.hermit_dir));
+    let yaml_files = find_hermit_yaml_files(search_root);
     let global_config = config::GlobalConfig::from_paths(search_root, &yaml_files)?;
     match cli.command {
         Commands::Init { init_command } => match init_command {

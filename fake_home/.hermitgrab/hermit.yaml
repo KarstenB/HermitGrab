@@ -1,13 +1,33 @@
 sources:
   apt: |
     #!/bin/bash
-    echo apt-get update
-    echo apt-get install -y {{ name }} {{ version }} {{ bla }}
+    [ "$(find /var/lib/apt/lists -type f -mmin +720)" ] && sudo apt-get update
+    sudo apt-get install -y --no-install-recommends {{ name }} {{ version }}
   brew: brew install {{ name }}
+  ubi: |
+    #!/bin/bash
+    location="$HOME/.local/bin"
+    if [ "{{ location }}" != "" ]; then
+      location="{{ location }}"
+    fi
+    exe=""
+    if [ "{{ exe }}" != "" ]; then
+      exe="-e {{ exe }}"
+    fi
+    if [ "{{ url }}" != "" ]; then
+      ubi -u {{ url }} $exe -i $location
+    else
+      ubi -p {{ name }} $exe -i $location
+    fi
 profiles:
   karsten:
     - fish
     - starship
+    - ripgrep
+    - eza
+    - bashrc
+    - bat
+    - fd
   default:
     - fish
   work-rust:

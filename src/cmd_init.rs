@@ -1,12 +1,12 @@
 use anyhow::Result;
-use directories::UserDirs;
 use git2::{Cred, RemoteCallbacks, Repository};
 use oauth2::http::header::ACCEPT;
 use octocrab::Octocrab;
 use secrecy::{ExposeSecret, SecretBox};
 
 use crate::{
-    common_cli::success, hermitgrab_error::DiscoverError, hermitgrab_info, info, success, warn,
+    common_cli::success, hermit_dir, hermitgrab_error::DiscoverError, hermitgrab_info, info,
+    success, warn,
 };
 
 pub fn clone_or_update_repo(repo: String, token: Option<&str>) -> Result<(), DiscoverError> {
@@ -38,21 +38,15 @@ pub fn clone_or_update_repo(repo: String, token: Option<&str>) -> Result<(), Dis
     Ok(())
 }
 
-fn hermit_dir() -> std::path::PathBuf {
-    let user_dirs = UserDirs::new().expect("Could not get user directories");
-    let dotfiles_dir = user_dirs.home_dir().join(".hermitgrab");
-    dotfiles_dir
-}
-
 pub async fn discover_repo(create: bool) -> Result<(), DiscoverError> {
     hermitgrab_info!("Discovering dotfiles repository...");
-    let dotfiles_dir = hermit_dir();
-    if dotfiles_dir.exists() {
+    let hermit_dir = hermit_dir();
+    if hermit_dir.exists() {
         info!(
             "Dotfiles directory already exists at {}",
-            dotfiles_dir.display()
+            hermit_dir.display()
         );
-        Repository::open(&dotfiles_dir)?;
+        Repository::open(&hermit_dir)?;
         info!("Repository already initialized, skipping discovery.");
         return Ok(());
     }

@@ -1,0 +1,8 @@
+provides:
+  - fd
+install:
+  - name: sharkdp/fd
+    check_cmd: command -v fd
+    source: ubi
+    variables:
+      exe: fd
