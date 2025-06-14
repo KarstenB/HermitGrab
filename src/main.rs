@@ -1,9 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use directories::UserDirs;
+use git2::Repository;
 
 pub mod action;
 pub mod cmd_apply;
+#[cfg(feature = "interactive")]
 pub mod cmd_apply_tui;
 pub mod cmd_init;
 pub mod common_cli;
@@ -12,6 +14,8 @@ pub mod detector;
 pub mod execution_plan;
 pub mod hermitgrab_error;
 pub mod links_files;
+#[cfg(feature = "ubi")]
+pub mod ubi_int;
 
 pub use crate::action::{Action, InstallAction, LinkAction};
 use crate::common_cli::{hermitgrab_info, info};
@@ -31,24 +35,13 @@ struct Cli {
     command: Commands,
     /// Run in interactive TUI mode
     #[arg(short = 'i', env = "HERMIT_INTERACTIVE", global = true)]
+    #[cfg(feature = "interactive")]
     interactive: bool,
     /// Increase output verbosity
     #[arg(short = 'v', long, env = "HERMIT_VERBOSE", global = true)]
     verbose: bool,
     #[arg(short = 'y', long, env = "HERMIT_CONFIRM", global = true)]
     confirm: bool,
-    /// Include actions matching these tags (can be specified multiple times)
-    #[arg(short='t', long = "tag", env="HERMIT_TAGS", value_name = "TAG", num_args = 0.., global = true)]
-    tags: Vec<String>,
-    /// Use a named profile which is a set of tags
-    #[arg(
-        short = 'p',
-        long,
-        env = "HERMIT_PROFILE",
-        value_name = "PROFILE",
-        global = true
-    )]
-    profile: Option<String>,
     /// Path to the hermitgrab config directory
     /// If not set, defaults to ~/.hermitgrab
     #[arg(
@@ -70,17 +63,39 @@ enum GetCommand {
 }
 
 #[derive(Subcommand)]
+enum Provider {
+    /// Use GitHub as the provider
+    GitHub {
+        #[arg(long, env = "HERMIT_GITHUB_TOKEN")]
+        token: Option<String>,
+    },
+    /// Use GitLab as the provider
+    GitLab {
+        #[arg(long, env = "HERMIT_GITLAB_TOKEN")]
+        token: Option<String>,
+    },
+    /// Use AzureDevOps as the provider
+    AzureDevOps {
+        #[arg(long, env = "HERMIT_AZURE_DEVOPS_TOKEN")]
+        token: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum InitCommand {
     /// Clone a dotfiles repo from a given URL
     Clone {
         /// Git repository URL
         repo: String,
     },
-    /// Discover dotfiles repo on GitHub (with authentication)
+    /// Discover dotfiles repo on GitHub, GitLab or AzureDevOps
     Discover {
         /// Create the repo if not found
         #[arg(long)]
         create: bool,
+        /// Provider to use for discovery
+        #[command(subcommand)]
+        provider: Provider,
     },
     /// Create an empty local dotfiles repo
     Create,
@@ -94,13 +109,33 @@ enum Commands {
         init_command: InitCommand,
     },
     /// Install applications and link/copy dotfiles
-    Apply,
+    Apply {
+        /// Include actions matching these tags (can be specified multiple times)
+        #[arg(short='t', long = "tag", env="HERMIT_TAGS", value_name = "TAG", num_args = 0.., global = true)]
+        tags: Vec<String>,
+        /// Use a named profile which is a set of tags
+        #[arg(
+            short = 'p',
+            long,
+            env = "HERMIT_PROFILE",
+            value_name = "PROFILE",
+            global = true
+        )]
+        profile: Option<String>,
+    },
     /// Show status of managed files
     Status,
     /// Show tags or profiles
     Get {
         #[command(subcommand)]
         get_command: GetCommand,
+    },
+    #[cfg(feature = "ubi")]
+    /// Run UBI for installing applications
+    Ubi {
+        /// Arguments to pass to UBI
+        #[arg(last = true)]
+        ubi_args: Vec<String>,
     },
 }
 
@@ -139,18 +174,46 @@ async fn main() -> Result<()> {
                 let pat = std::env::var("HERMITGRAB_GITHUB_TOKEN");
                 crate::cmd_init::clone_or_update_repo(repo, pat.ok().as_deref())?;
             }
-            InitCommand::Discover { create } => {
-                crate::cmd_init::discover_repo(create).await?;
+            InitCommand::Discover { create, provider } => {
+                let hermit_dir = hermit_dir();
+                if hermit_dir.exists() {
+                    info!(
+                        "Dotfiles directory already exists at {}",
+                        hermit_dir.display()
+                    );
+                    Repository::open(&hermit_dir)?;
+                    info!("Repository already initialized, skipping discovery.");
+                    return Ok(());
+                }
+                match provider {
+                    Provider::GitHub { token } => {
+                        crate::cmd_init::discover_repo_with_github(create, token).await?;
+                    }
+                    Provider::GitLab { token } => {
+                        crate::cmd_init::discover_repo_with_gitlab(create, token).await?;
+                    }
+                    Provider::AzureDevOps { token } => {
+                        crate::cmd_init::discover_repo_with_azure_devops(create, token).await?;
+                    }
+                }
             }
             InitCommand::Create => {
                 crate::cmd_init::create_local_repo()?;
             }
         },
-        Commands::Apply => {
+        Commands::Apply {
+            ref tags,
+            ref profile,
+        } => {
+            #[cfg(feature = "interactive")]
             if cli.interactive {
-                cmd_apply_tui::run_tui(&global_config, &cli)?;
+                cmd_apply_tui::run_tui(&global_config, &cli, tags, profile)?;
             } else {
-                cmd_apply::apply_with_tags(cli, &global_config)?;
+                cmd_apply::apply_with_tags(&global_config, &cli, tags, profile)?;
+            }
+            #[cfg(not(feature = "interactive"))]
+            {
+                cmd_apply::apply_with_tags(&global_config, &cli, tags, profile)?;
             }
         }
         Commands::Status => {
@@ -181,6 +244,12 @@ async fn main() -> Result<()> {
                 }
             }
         },
+        #[cfg(feature = "ubi")]
+        Commands::Ubi { mut ubi_args } => {
+            ubi_args.insert(0, "hermitgrab ubi --".to_string());
+            hermitgrab_info!("Running UBI with args: {:?}", ubi_args);
+            ubi_int::main(&ubi_args).await
+        }
     }
     Ok(())
 }

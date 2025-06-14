@@ -34,7 +34,11 @@ files:
     target: ~/.config/fish/functions/ls.fish
     requires:
       - eza
-
+  # Bat aliases
+  - source: functions/cat.fish
+    target: ~/.config/fish/functions/cat.fish
+    requires:
+      - bat
 
 install:
   - name: fish

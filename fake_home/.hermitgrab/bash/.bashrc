@@ -101,3 +101,8 @@ fi
 if command -v starship >/dev/null 2>&1; then
     eval "$(starship init bash)"
 fi
+export PATH="$HOME/.local/bin:$PATH"
+if command -v hermitgrab >/dev/null 2>&1; then
+    alias ubi='hermitgrab ubi'
+    alias hg='hermitgrab'
+fi

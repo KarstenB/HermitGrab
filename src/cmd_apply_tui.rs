@@ -1,6 +1,7 @@
 // cmd_apply_tui.rs
 // TUI for interactive apply using ratatui
 
+use crate::Cli;
 use crate::config::{GlobalConfig, Tag};
 use crate::execution_plan::create_execution_plan;
 use crate::hermitgrab_error::ApplyError;
@@ -104,7 +105,12 @@ impl App {
     }
 }
 
-pub(crate) fn run_tui(global_config: &GlobalConfig, cli: &crate::Cli) -> Result<(), ApplyError> {
+pub(crate) fn run_tui(
+    global_config: &GlobalConfig,
+    _cli: &Cli,
+    tags: &[String],
+    profile: &Option<String>,
+) -> Result<(), ApplyError> {
     // Collect all profiles and tags from GlobalConfig
     let actions = create_execution_plan(global_config)?;
     let mut all_tags = global_config
@@ -118,8 +124,8 @@ pub(crate) fn run_tui(global_config: &GlobalConfig, cli: &crate::Cli) -> Result<
             .iter()
             .map(|t| (t.clone(), true)),
     );
-    let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
-    let profile_to_use = global_config.get_profile(&cli.profile)?;
+    let active_tags = global_config.get_active_tags(tags, profile)?;
+    let profile_to_use = global_config.get_profile(profile)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
     let sorted = filtered_actions.sort_by_dependency();
 

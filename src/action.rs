@@ -248,8 +248,17 @@ impl Action for InstallAction {
 }
 
 fn execute_script(cmd: &str) -> Result<std::process::Output, std::io::Error> {
+    let path = if which::which("ubi").is_err() {
+        insert_ubi_into_path()?
+    } else {
+        std::env::var("PATH").unwrap_or_default()
+    };
     if !cmd.starts_with("#!") {
-        return std::process::Command::new("sh").arg("-c").arg(cmd).output();
+        return std::process::Command::new("sh")
+            .env("PATH", path)
+            .arg("-c")
+            .arg(cmd)
+            .output();
     };
     tempfile::NamedTempFile::new()
         .and_then(|mut file| {
@@ -263,7 +272,45 @@ fn execute_script(cmd: &str) -> Result<std::process::Output, std::io::Error> {
             }
             Ok(cmd_path)
         })
-        .and_then(|cmd| std::process::Command::new(&cmd).output())
+        .and_then(|cmd| std::process::Command::new(&cmd).env("PATH", path).output())
+}
+
+#[cfg(not(feature = "ubi"))]
+fn insert_ubi_into_path() -> Result<String, std::io::Error> {
+    Ok(std::env::var("PATH").unwrap_or_default())
+}
+
+#[cfg(feature = "ubi")]
+fn insert_ubi_into_path() -> Result<String, std::io::Error> {
+    use std::sync::OnceLock;
+    use tempfile::TempDir;
+    static UBI_EXE_DIR: OnceLock<TempDir> = OnceLock::new();
+    let temp_dir =
+        UBI_EXE_DIR.get_or_init(|| TempDir::new().expect("Failed to create temporary directory"));
+    let mut path = std::env::var("PATH").unwrap_or_default();
+    path.push(':');
+    path.push_str(temp_dir.path().to_str().unwrap());
+    let ubi_exe = temp_dir.path().join("ubi");
+    if !ubi_exe.exists() {
+        let script = format!(
+            r#"#!/bin/sh
+{} ubi -- "$@"
+        "#,
+            std::env::current_exe()?.display()
+        );
+        println!(
+            "Writing ubi script to: {}, new PATH: {}",
+            ubi_exe.display(),
+            path
+        );
+        std::fs::write(&ubi_exe, script)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&ubi_exe, std::fs::Permissions::from_mode(0o755))?;
+        }
+    }
+    Ok(path)
 }
 
 #[cfg(test)]

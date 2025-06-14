@@ -13,8 +13,13 @@ use crate::{error, hermitgrab_info};
 #[allow(unused_imports)]
 use crate::common_cli::step;
 
-pub(crate) fn apply_with_tags(cli: Cli, global_config: &GlobalConfig) -> Result<(), ApplyError> {
-    let active_tags = global_config.get_active_tags(&cli.tags, &cli.profile)?;
+pub(crate) fn apply_with_tags(
+    global_config: &GlobalConfig,
+    cli: &Cli,
+    tags: &[String],
+    profile: &Option<String>,
+) -> Result<(), ApplyError> {
+    let active_tags = global_config.get_active_tags(tags, profile)?;
     let active_tags_str = active_tags
         .iter()
         .map(|t| t.to_string())

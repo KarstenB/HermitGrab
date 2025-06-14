@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crossterm::style::Stylize;
 
 pub fn hermitgrab_info(msg: &str) {
@@ -37,6 +39,14 @@ pub fn stderr(msg: &str) {
     for line in lines {
         println!("{} {}", "    [stderr]".bold().dark_red(), line.dark_red());
     }
+}
+
+pub fn prompt(prompt: &str) -> Result<String, std::io::Error> {
+    print!("{}", prompt.yellow());
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_string())
 }
 
 #[macro_export]
@@ -85,5 +95,11 @@ macro_rules! stdout {
 macro_rules! stderr {
     ($($arg:tt)*) => {
         $crate::common_cli::stderr(&format!($($arg)*));
+    };
+}
+#[macro_export]
+macro_rules! prompt {
+    ($($arg:tt)*) => {
+        $crate::common_cli::prompt(&format!($($arg)*))
     };
 }
