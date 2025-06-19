@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io::Write;
@@ -11,6 +12,23 @@ use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
 use crate::links_files;
 use handlebars::Handlebars;
+
+pub fn expand_directory(dir: &str) -> String {
+    let handlebars = handlebars::Handlebars::new();
+    let dir = handlebars
+        .render_template(dir, &HashMap::<String, String>::new())
+        .unwrap_or_else(|_| dir.to_string());
+    let dst_str = if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
+        std::env::var("XDG_CONFIG_HOME").unwrap_or_default()
+    } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
+        std::env::var("XDG_DATA_HOME").unwrap_or_default()
+    } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
+        std::env::var("XDG_STATE_HOME").unwrap_or_default()
+    } else {
+        shellexpand::tilde(&dir).to_string()
+    };
+    dst_str
+}
 
 #[derive(Debug, Clone)]
 pub struct ActionOutput {
@@ -71,7 +89,7 @@ impl LinkAction {
             .unwrap_or(&src)
             .to_string_lossy()
             .to_string();
-        let rel_dst = shellexpand::tilde(&dst).to_string();
+        let rel_dst = expand_directory(&dst);
         let rel_dst = rel_dst
             .strip_prefix(shellexpand::tilde("~/").as_ref())
             .unwrap_or(&rel_dst)
@@ -97,10 +115,7 @@ impl Action for LinkAction {
             LinkType::Hard => "Hardlink",
             LinkType::Copy => "Copy",
         };
-        format!(
-            "{link_type_str} .hermitgrab/{} -> ~/{}",
-            self.rel_src, self.rel_dst
-        )
+        format!("{link_type_str} {} -> {}", self.rel_src, self.rel_dst)
     }
     fn long_description(&self) -> String {
         format!(
@@ -120,7 +135,7 @@ impl Action for LinkAction {
         self.id.clone()
     }
     fn execute(&self) -> Result<(), ActionError> {
-        let dst_str = shellexpand::tilde(&self.dst).to_string();
+        let dst_str = expand_directory(&self.dst);
         links_files::link_files(&self.src, dst_str, self.link_type)
             .map_err(LinkActionError::AtomicLinkError)?;
         Ok(())
@@ -133,9 +148,11 @@ pub struct InstallAction {
     tags: Vec<RequireTag>,
     depends: Vec<String>,
     check_cmd: Option<String>,
+    pre_install_cmd: Option<String>,
+    post_install_cmd: Option<String>,
     install_cmd: String,
     version: Option<String>,
-    variables: HashMap<String, String>,
+    variables: BTreeMap<String, String>,
     output: Mutex<Option<ActionOutput>>,
 }
 impl InstallAction {
@@ -146,9 +163,11 @@ impl InstallAction {
         tags: BTreeSet<RequireTag>,
         depends: Vec<String>,
         check_cmd: Option<String>,
+        pre_install_cmd: Option<String>,
+        post_install_cmd: Option<String>,
         install_cmd: String,
         version: Option<String>,
-        variables: HashMap<String, String>,
+        variables: BTreeMap<String, String>,
     ) -> Self {
         Self {
             id,
@@ -156,6 +175,8 @@ impl InstallAction {
             tags: tags.into_iter().collect(),
             depends,
             check_cmd,
+            pre_install_cmd,
+            post_install_cmd,
             install_cmd,
             version,
             variables,
@@ -176,25 +197,52 @@ impl InstallAction {
                     );
                     *self.output.lock().expect("Expected to unlock output mutex") =
                         Some(action_output);
-                    return Ok(false); // Already installed
+                    return Ok(false);
                 }
             }
         }
         Ok(true)
     }
 
-    fn prepare_install_cmd(&self) -> Result<String, ActionError> {
+    fn prepare_cmd(&self, cmd: &str) -> Result<String, ActionError> {
         let reg = Handlebars::new();
         let mut data = self.variables.clone();
         data.insert("name".to_string(), self.name.clone());
         if let Some(version) = &self.version {
             data.insert("version".to_string(), version.clone());
         }
-        let template = shellexpand::tilde(&self.install_cmd).to_string();
+        let template = shellexpand::tilde(cmd).to_string();
         let cmd = reg
             .render_template(&template, &data)
             .map_err(InstallActionError::RenderError)?;
         Ok(cmd)
+    }
+
+    fn update_output(&self, cmd: &String, output: std::process::Output) -> Result<(), ActionError> {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let mut mutex_guard = self.output.lock().expect("Expected to unlock output mutex");
+        if let Some(action_output) = mutex_guard.as_ref() {
+            // If output is already set, append to it
+            let new_output = ActionOutput::new(
+                format!("{}---\n{}", action_output.standard_output, stdout),
+                format!("{}---\n{}", action_output.error_output, stderr),
+            );
+            *mutex_guard = Some(new_output);
+        } else {
+            // Otherwise, create a new output
+            let action_output = ActionOutput::new(stdout, stderr);
+            *mutex_guard = Some(action_output);
+        }
+        let status = output.status;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(InstallActionError::CommandFailed(
+                cmd.to_string(),
+                status.code().expect("Should have an exit code"),
+            ))?
+        }
     }
 }
 
@@ -218,26 +266,35 @@ impl Action for InstallAction {
         if !self.install_required()? {
             return Ok(()); // Installation not required
         }
-        let cmd = self.prepare_install_cmd()?;
+        if let Some(ref pre_cmd) = self.pre_install_cmd {
+            let cmd = self.prepare_cmd(pre_cmd)?;
+            let output = execute_script(&cmd);
+            match output {
+                Ok(output) => {
+                    self.update_output(&cmd, output)?;
+                }
+                Err(e) => Err(InstallActionError::PreCommandFailedLaunch(cmd, e))?,
+            }
+        }
+        let cmd = self.prepare_cmd(&self.install_cmd)?;
         let output = execute_script(&cmd);
         match output {
             Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let action_output = ActionOutput::new(stdout, stderr);
-                *self.output.lock().expect("Expected to unlock output mutex") = Some(action_output);
-                let status = output.status;
-                if status.success() {
-                    Ok(())
-                } else {
-                    Err(InstallActionError::CommandFailed(
-                        cmd,
-                        status.code().expect("Should have an exit code"),
-                    ))?
-                }
+                self.update_output(&cmd, output)?;
             }
             Err(e) => Err(InstallActionError::CommandFailedLaunch(cmd, e))?,
         }
+        if let Some(ref post_cmd) = self.post_install_cmd {
+            let cmd = self.prepare_cmd(post_cmd)?;
+            let output = execute_script(&cmd);
+            match output {
+                Ok(output) => {
+                    self.update_output(&cmd, output)?;
+                }
+                Err(e) => Err(InstallActionError::PostCommandFailedLaunch(cmd, e))?,
+            }
+        }
+        Ok(())
     }
     fn get_output(&self) -> Option<ActionOutput> {
         self.output

@@ -35,6 +35,18 @@ pub enum ConfigLoadError {
 }
 
 #[derive(Debug, Error)]
+pub enum AddError {
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    ConfigLoadError(#[from] ConfigLoadError),
+    #[error("Failed to determine home directory")]
+    NoHomeDir,
+    #[error("Invalid choice")]
+    InvalidChoice,
+}
+
+#[derive(Debug, Error)]
 pub enum ApplyError {
     #[error("Profile not found: {0}")]
     ProfileNotFound(String),
@@ -72,6 +84,10 @@ pub enum InstallActionError {
     CommandFailed(String, i32),
     #[error("Failed to launch install command: {0} due to IO error: {1}")]
     CommandFailedLaunch(String, std::io::Error),
+    #[error("Failed to launch pre-command: {0} due to IO error: {1}")]
+    PreCommandFailedLaunch(String, std::io::Error),
+    #[error("Failed to launch post-command: {0} due to IO error: {1}")]
+    PostCommandFailedLaunch(String, std::io::Error),
 }
 
 #[derive(Debug, Error)]
@@ -86,4 +102,6 @@ pub enum DiscoverError {
     IoError(#[from] std::io::Error),
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+    #[error("Repository already exists at path: {0}")]
+    RepoAlreadyExists(std::path::PathBuf),
 }

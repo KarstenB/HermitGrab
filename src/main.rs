@@ -4,6 +4,7 @@ use directories::UserDirs;
 use git2::Repository;
 
 pub mod action;
+pub mod cmd_add;
 pub mod cmd_apply;
 #[cfg(feature = "interactive")]
 pub mod cmd_apply_tui;
@@ -19,8 +20,8 @@ pub mod ubi_int;
 
 pub use crate::action::{Action, InstallAction, LinkAction};
 use crate::common_cli::{hermitgrab_info, info};
-use crate::config::find_hermit_yaml_files;
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
+use crate::config::{Tag, find_hermit_yaml_files};
 pub use crate::hermitgrab_error::AtomicLinkError;
 pub use std::collections::HashSet;
 use std::path::PathBuf;
@@ -54,6 +55,46 @@ struct Cli {
     hermit_dir: Option<PathBuf>,
 }
 
+#[derive(Subcommand)]
+enum AddCommand {
+    TargetDir {
+        /// Subdirectory of the hermit.yaml file to add the target directory to
+        #[arg(short, long)]
+        target_dir: Option<String>,
+        /// Tags this config provides
+        #[arg(short = 't', long = "tag", value_name = "TAG", num_args = 0..)]
+        tags: Vec<String>,
+        /// Tags this config requires
+        #[arg(short = 'r', long = "require-tag", value_name = "TAG", num_args = 0..)]
+        required_tags: Vec<RequireTag>,
+    },
+    /// Add a new Link to the config
+    Link {
+        /// Subdirectory of the hermit.yaml file to add the link to
+        #[arg(long)]
+        target_dir: Option<String>,
+        /// Source file or directory to link
+        source: PathBuf,
+        /// Link type to use, can be 'soft', 'hard' or 'copy'
+        #[arg(short = 'l', long, default_value = "soft", value_enum)]
+        link_type: LinkType,
+        /// Destination path for the link, if not specified, uses the source name
+        #[arg(short, long)]
+        destination: Option<String>,
+        /// Required tags to include in the link (can be specified multiple times).
+        /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
+        #[arg(short = 't', long = "tag", value_name = "TAG", num_args = 0..)]
+        required_tags: Vec<RequireTag>,
+    },
+    /// Add a new profile to the config
+    Profile {
+        /// Name of the profile to add
+        name: String,
+        /// Tags to include in the profile (can be specified multiple times)
+        #[arg(short = 't', long = "tag", value_name = "TAG", num_args = 0..)]
+        tags: Vec<Tag>,
+    },
+}
 #[derive(Subcommand)]
 enum GetCommand {
     /// Show all tags (including auto detected)
@@ -133,9 +174,13 @@ enum Commands {
     #[cfg(feature = "ubi")]
     /// Run UBI for installing applications
     Ubi {
-        /// Arguments to pass to UBI
+        /// Arguments to pass to UBI (The Universal Binary Installer)
         #[arg(last = true)]
         ubi_args: Vec<String>,
+    },
+    Add {
+        #[command(subcommand)]
+        add_command: AddCommand,
     },
 }
 
@@ -199,6 +244,34 @@ async fn main() -> Result<()> {
             }
             InitCommand::Create => {
                 crate::cmd_init::create_local_repo()?;
+            }
+        },
+        Commands::Add { add_command } => match add_command {
+            AddCommand::TargetDir {
+                ref target_dir,
+                ref tags,
+                ref required_tags,
+            } => {
+                cmd_add::add_target_dir(&global_config, target_dir, tags, required_tags)?;
+            }
+            AddCommand::Link {
+                ref target_dir,
+                ref source,
+                ref link_type,
+                ref destination,
+                ref required_tags,
+            } => {
+                cmd_add::add_link(
+                    &global_config,
+                    target_dir,
+                    source,
+                    link_type,
+                    destination,
+                    required_tags,
+                )?;
+            }
+            AddCommand::Profile { ref name, ref tags } => {
+                cmd_add::add_profile(&global_config, name, tags)?;
             }
         },
         Commands::Apply {

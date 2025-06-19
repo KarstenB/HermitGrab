@@ -3,6 +3,12 @@ use std::collections::BTreeSet;
 
 pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     let mut tags = BTreeSet::new();
+    // get user name
+    let user = whoami::username();
+    tags.insert(Tag::new(
+        &format!("user={user}"),
+        crate::config::Source::BuiltInDetector,
+    ));
     // Hostname
     if let Ok(hostname) = get_hostname() {
         tags.insert(Tag::new(

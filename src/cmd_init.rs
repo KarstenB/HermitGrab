@@ -152,9 +152,20 @@ async fn github_device_flow_auth() -> Result<(Octocrab, String), DiscoverError> 
     Ok((Octocrab::builder().oauth(auth).build()?, token))
 }
 
-pub fn create_local_repo() -> Result<()> {
+pub fn create_local_repo() -> Result<(), DiscoverError> {
     hermitgrab_info!("Creating empty local dotfiles repo (not yet implemented)");
-    // TODO: Implement local repo creation
+    let hermit_dir = hermit_dir();
+    if hermit_dir.exists() {
+        warn!(
+            "Dotfiles directory already exists at {}",
+            hermit_dir.display()
+        );
+        return Err(DiscoverError::RepoAlreadyExists(hermit_dir));
+    }
+    std::fs::create_dir_all(&hermit_dir)?;
+    Repository::init(&hermit_dir)?;
+    success!("Initialized empty repository at {}", hermit_dir.display());
+    info!("You can now add your dotfiles to this directory and commit them.");
     Ok(())
 }
 

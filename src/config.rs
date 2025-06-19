@@ -1,15 +1,20 @@
 use serde::Deserialize;
 use serde::Deserializer;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub const CONF_FILE_NAME: &'static str = "hermit.yaml";
+pub const DEFAULT_PROFILE: &str = "default";
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Source {
     Unknown,
     CommandLine,
@@ -75,6 +80,26 @@ impl std::fmt::Display for Tag {
     }
 }
 
+impl FromStr for Tag {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err("Tag cannot be empty".to_string());
+        }
+        Ok(Tag::new(s, Source::Unknown))
+    }
+}
+
+impl Serialize for Tag {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
 impl<'de> Deserialize<'de> for Tag {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -100,12 +125,10 @@ impl RequireTag {
     }
 }
 
-impl<'de> Deserialize<'de> for RequireTag {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
+impl FromStr for RequireTag {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
         if let Some(rest) = trimmed.strip_prefix('+') {
             Ok(RequireTag::Positive(rest.to_string()))
@@ -118,32 +141,84 @@ impl<'de> Deserialize<'de> for RequireTag {
         }
     }
 }
+impl Display for RequireTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RequireTag::Positive(tag) => write!(f, "+{}", tag),
+            RequireTag::Negative(tag) => write!(f, "-{}", tag),
+        }
+    }
+}
 
-#[derive(Debug, Deserialize)]
+impl Serialize for RequireTag {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let s = match self {
+            RequireTag::Positive(tag) => format!("+{}", tag),
+            RequireTag::Negative(tag) => format!("-{}", tag),
+        };
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for RequireTag {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        RequireTag::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct HermitConfig {
     #[serde(skip)]
     path: PathBuf,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub provides: Vec<Tag>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<DotfileEntry>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub install: Vec<InstallEntry>,
     #[serde(default)]
-    pub sources: HashMap<String, String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub sources: BTreeMap<String, String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<RequireTag>,
     #[serde(default)]
-    pub profiles: HashMap<String, BTreeSet<Tag>>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub profiles: BTreeMap<String, BTreeSet<Tag>>,
 }
 
 impl HermitConfig {
+    pub fn create_new(path: &Path) -> Self {
+        HermitConfig {
+            path: path.to_path_buf(),
+            ..Default::default()
+        }
+    }
+
     pub fn path(&self) -> &Path {
         self.path.as_path()
     }
+
+    pub(crate) fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigLoadError> {
+        let content = serde_yml::to_string(self)
+            .map_err(|e| ConfigLoadError::SerdeYmlError(e, conf_file_name.clone()))?;
+        std::fs::write(conf_file_name, content)
+            .map_err(|e| ConfigLoadError::IoError(e, conf_file_name.clone()))?;
+        Ok(())
+    }
 }
 
-#[derive(Debug, Deserialize, Default, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkType {
     #[default]
@@ -152,13 +227,36 @@ pub enum LinkType {
     Copy,
 }
 
-#[derive(Debug, Deserialize)]
+impl FromStr for LinkType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "soft" | "symlink" => Ok(LinkType::Soft),
+            "hard" | "hardlink" => Ok(LinkType::Hard),
+            "copy" => Ok(LinkType::Copy),
+            _ => Err(format!("Unknown link type: {}", s)),
+        }
+    }
+}
+impl Display for LinkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LinkType::Soft => write!(f, "soft"),
+            LinkType::Hard => write!(f, "hard"),
+            LinkType::Copy => write!(f, "copy"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DotfileEntry {
     pub source: String,
     pub target: String,
     #[serde(default)]
     pub link: LinkType,
     #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
 }
 impl DotfileEntry {
@@ -174,20 +272,29 @@ impl DotfileEntry {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InstallEntry {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub check_cmd: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pre_install_cmd: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post_install_cmd: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
     #[serde(default)]
-    pub variables: std::collections::HashMap<String, String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub variables: BTreeMap<String, String>,
 }
 
 impl InstallEntry {
-    pub fn to_handlebars_map(&self) -> std::collections::HashMap<String, String> {
+    pub fn to_handlebars_map(&self) -> BTreeMap<String, String> {
         let mut map = self.variables.clone();
         map.insert("name".to_string(), self.name.clone());
         if let Some(version) = &self.version {
@@ -208,10 +315,10 @@ impl InstallEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GlobalConfig {
     pub root_dir: PathBuf,
-    pub subconfigs: Vec<HermitConfig>,
+    pub subconfigs: BTreeMap<String, HermitConfig>,
     pub all_profiles: BTreeMap<String, BTreeSet<Tag>>,
     pub all_provided_tags: BTreeSet<Tag>,
     pub all_detected_tags: BTreeSet<Tag>,
@@ -220,7 +327,7 @@ pub struct GlobalConfig {
 
 impl GlobalConfig {
     pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
-        let mut subconfigs = Vec::new();
+        let mut subconfigs = BTreeMap::new();
         let mut all_profiles = BTreeMap::new();
         let mut all_provided_tags = BTreeSet::new();
         let mut all_sources = BTreeMap::new();
@@ -246,7 +353,9 @@ impl GlobalConfig {
                 }
                 all_profiles.insert(profile_lc, tags.clone());
             }
-            subconfigs.push(config);
+            let relative_path = path.strip_prefix(root_dir).unwrap_or(&path);
+            let relative_path_str = relative_path.to_string_lossy().to_string();
+            subconfigs.insert(relative_path_str, config);
         }
         let all_detected_tags = detect_builtin_tags();
         Ok(GlobalConfig {
@@ -306,16 +415,22 @@ impl GlobalConfig {
                 return Err(ApplyError::ProfileNotFound(profile.to_string()));
             }
             res
-        } else if self.all_profiles.contains_key("default") {
+        } else if self.all_profiles.contains_key(DEFAULT_PROFILE) {
             profiles
                 .iter()
                 .enumerate()
-                .find(|(_, p)| p.eq_ignore_ascii_case("default"))
+                .find(|(_, p)| p.eq_ignore_ascii_case(DEFAULT_PROFILE))
                 .map(|(i, p)| (i, p.clone()))
         } else {
             None
         };
         Ok(profile_to_use)
+    }
+
+    pub(crate) fn root_config(&self) -> Option<&HermitConfig> {
+        let root_path = self.root_dir.join(CONF_FILE_NAME);
+        self.subconfigs
+            .get(&root_path.to_string_lossy().to_string())
     }
 }
 
@@ -330,7 +445,7 @@ pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, Confi
 
 pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
-    if root.is_file() && root.file_name().is_some_and(|f| f == "hermit.yaml") {
+    if root.is_file() && root.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
         result.push(root.to_path_buf());
     } else if root.is_dir() {
         if let Ok(entries) = std::fs::read_dir(root) {
@@ -338,7 +453,7 @@ pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
                 let path = entry.path();
                 if path.is_dir() {
                     result.extend(find_hermit_yaml_files(&path));
-                } else if path.file_name().is_some_and(|f| f == "hermit.yaml") {
+                } else if path.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
                     result.push(path);
                 }
             }
