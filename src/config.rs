@@ -11,7 +11,7 @@ use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
 
-pub const CONF_FILE_NAME: &'static str = "hermit.yaml";
+pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -178,8 +178,8 @@ pub struct HermitConfig {
     #[serde(skip)]
     path: PathBuf,
     #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub provides: Vec<Tag>,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub provides: BTreeSet<Tag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<DotfileEntry>,
@@ -190,8 +190,8 @@ pub struct HermitConfig {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub sources: BTreeMap<String, String>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub requires: Vec<RequireTag>,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub requires: BTreeSet<RequireTag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub profiles: BTreeMap<String, BTreeSet<Tag>>,
@@ -210,8 +210,8 @@ impl HermitConfig {
     }
 
     pub(crate) fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigLoadError> {
-        let content = serde_yml::to_string(self)
-            .map_err(|e| ConfigLoadError::SerdeYmlError(e, conf_file_name.clone()))?;
+        let content = toml::to_string(self)
+            .map_err(|e| ConfigLoadError::SerializeTomlError(e, conf_file_name.clone()))?;
         std::fs::write(conf_file_name, content)
             .map_err(|e| ConfigLoadError::IoError(e, conf_file_name.clone()))?;
         Ok(())
@@ -254,11 +254,20 @@ pub struct DotfileEntry {
     pub source: String,
     pub target: String,
     #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
     pub link: LinkType,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
 }
+
+fn is_default(link_type: &LinkType) -> bool {
+    match link_type {
+        LinkType::Soft => true,
+        _ => false,
+    }
+}
+
 impl DotfileEntry {
     pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
@@ -353,7 +362,7 @@ impl GlobalConfig {
                 }
                 all_profiles.insert(profile_lc, tags.clone());
             }
-            let relative_path = path.strip_prefix(root_dir).unwrap_or(&path);
+            let relative_path = path.strip_prefix(root_dir).unwrap_or(path);
             let relative_path_str = relative_path.to_string_lossy().to_string();
             subconfigs.insert(relative_path_str, config);
         }
@@ -437,8 +446,8 @@ impl GlobalConfig {
 pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, ConfigLoadError> {
     let content = std::fs::read_to_string(path.as_ref())
         .map_err(|e| ConfigLoadError::IoError(e, path.as_ref().to_path_buf()))?;
-    let mut config: HermitConfig = serde_yml::from_str(&content)
-        .map_err(|e| ConfigLoadError::SerdeYmlError(e, path.as_ref().to_path_buf()))?;
+    let mut config: HermitConfig = toml::from_str(&content)
+        .map_err(|e| ConfigLoadError::DeserializeTomlError(e, path.as_ref().to_path_buf()))?;
     config.path = path.as_ref().to_path_buf();
     Ok(config)
 }

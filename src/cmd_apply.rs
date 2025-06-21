@@ -28,7 +28,7 @@ pub(crate) fn apply_with_tags(
     hermitgrab_info!("Active tags: {}", active_tags_str);
     let actions = create_execution_plan(global_config)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-    let sorted = filtered_actions.sort_by_dependency();
+    let sorted = filtered_actions.sort_by_requires();
     present_execution_plan(&sorted);
     if !cli.confirm {
         confirm_with_user()?;

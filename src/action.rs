@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 use crate::LinkType;
 use crate::RequireTag;
+use crate::config::Tag;
 use crate::hermitgrab_error::ActionError;
 use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
@@ -18,7 +19,8 @@ pub fn expand_directory(dir: &str) -> String {
     let dir = handlebars
         .render_template(dir, &HashMap::<String, String>::new())
         .unwrap_or_else(|_| dir.to_string());
-    let dst_str = if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
+
+    if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
         std::env::var("XDG_CONFIG_HOME").unwrap_or_default()
     } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
         std::env::var("XDG_DATA_HOME").unwrap_or_default()
@@ -26,8 +28,7 @@ pub fn expand_directory(dir: &str) -> String {
         std::env::var("XDG_STATE_HOME").unwrap_or_default()
     } else {
         shellexpand::tilde(&dir).to_string()
-    };
-    dst_str
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -58,8 +59,11 @@ pub trait Action: Send + Sync {
     fn get_output(&self) -> Option<ActionOutput> {
         None
     }
-    fn tags(&self) -> &[RequireTag];
-    fn dependencies(&self) -> &[String];
+    fn requires(&self) -> &[RequireTag];
+    fn provides(&self) -> &[Tag];
+    fn provides_tag(&self, tag: &Tag) -> bool {
+        self.provides().iter().any(|t| t == tag)
+    }
     fn id(&self) -> String; // Unique identifier for sorting/deps
     fn execute(&self) -> Result<(), ActionError>;
 }
@@ -71,8 +75,8 @@ pub struct LinkAction {
     src: PathBuf,
     dst: String,
     link_type: LinkType,
-    tags: Vec<RequireTag>,
-    depends: Vec<String>,
+    requires: Vec<RequireTag>,
+    provides: Vec<Tag>,
 }
 impl LinkAction {
     pub(crate) fn new(
@@ -80,8 +84,8 @@ impl LinkAction {
         config_dir: &PathBuf,
         src: PathBuf,
         dst: String,
-        tags: BTreeSet<RequireTag>,
-        depends: Vec<String>,
+        requires: BTreeSet<RequireTag>,
+        provides: BTreeSet<Tag>,
         link_type: LinkType,
     ) -> Self {
         let rel_src = src
@@ -102,8 +106,8 @@ impl LinkAction {
             dst,
             rel_dst,
             link_type,
-            tags: tags.into_iter().collect(),
-            depends,
+            requires: requires.into_iter().collect(),
+            provides: provides.into_iter().collect(),
         }
     }
 }
@@ -122,14 +126,14 @@ impl Action for LinkAction {
             "Symlink from {} to {} (tags: {:?})",
             self.src.display(),
             self.dst,
-            self.tags
+            self.requires
         )
     }
-    fn tags(&self) -> &[RequireTag] {
-        &self.tags
+    fn requires(&self) -> &[RequireTag] {
+        &self.requires
     }
-    fn dependencies(&self) -> &[String] {
-        &self.depends
+    fn provides(&self) -> &[Tag] {
+        &self.provides
     }
     fn id(&self) -> String {
         self.id.clone()
@@ -145,8 +149,8 @@ impl Action for LinkAction {
 pub struct InstallAction {
     id: String,
     name: String,
-    tags: Vec<RequireTag>,
-    depends: Vec<String>,
+    requires: Vec<RequireTag>,
+    provides: Vec<Tag>,
     check_cmd: Option<String>,
     pre_install_cmd: Option<String>,
     post_install_cmd: Option<String>,
@@ -160,8 +164,8 @@ impl InstallAction {
     pub fn new(
         id: String,
         name: String,
-        tags: BTreeSet<RequireTag>,
-        depends: Vec<String>,
+        requires: BTreeSet<RequireTag>,
+        provides: BTreeSet<Tag>,
         check_cmd: Option<String>,
         pre_install_cmd: Option<String>,
         post_install_cmd: Option<String>,
@@ -172,8 +176,8 @@ impl InstallAction {
         Self {
             id,
             name,
-            tags: tags.into_iter().collect(),
-            depends,
+            requires: requires.into_iter().collect(),
+            provides: provides.into_iter().collect(),
             check_cmd,
             pre_install_cmd,
             post_install_cmd,
@@ -253,11 +257,11 @@ impl Action for InstallAction {
     fn long_description(&self) -> String {
         format!("Install {} with cmd: {:?})", self.name, self.install_cmd)
     }
-    fn tags(&self) -> &[RequireTag] {
-        &self.tags
+    fn requires(&self) -> &[RequireTag] {
+        &self.requires
     }
-    fn dependencies(&self) -> &[String] {
-        &self.depends
+    fn provides(&self) -> &[Tag] {
+        &self.provides
     }
     fn id(&self) -> String {
         self.id.clone()

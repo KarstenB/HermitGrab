@@ -1,6 +1,0 @@
-provides:
-  - bashrc
-
-files:
-  - source: .bashrc
-    target: ~/.bashrc

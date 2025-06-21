@@ -74,7 +74,7 @@ impl App {
             .collect::<BTreeSet<Tag>>();
         let actions = create_execution_plan(global_config)?;
         let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-        let sorted = filtered_actions.sort_by_dependency();
+        let sorted = filtered_actions.sort_by_requires();
         self.execution_plan = sorted
             .iter()
             .map(|a| (a.short_description(), false))
@@ -127,7 +127,7 @@ pub(crate) fn run_tui(
     let active_tags = global_config.get_active_tags(tags, profile)?;
     let profile_to_use = global_config.get_profile(profile)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-    let sorted = filtered_actions.sort_by_dependency();
+    let sorted = filtered_actions.sort_by_requires();
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();

@@ -1,10 +1,11 @@
 use std::{
     collections::{BTreeSet, HashSet},
+    str::FromStr,
     sync::Arc,
 };
 
 use crate::{
-    Action, InstallAction,
+    Action, InstallAction, RequireTag,
     config::{GlobalConfig, Tag},
     hermitgrab_error::{ActionError, ApplyError},
 };
@@ -21,7 +22,7 @@ impl ExecutionPlan {
     pub fn filter_actions_by_tags(&self, active_tags: &BTreeSet<Tag>) -> ExecutionPlan {
         let mut filtered: Vec<ArcAction> = Vec::new();
         for action in self.actions.iter() {
-            let tags = action.tags();
+            let tags = action.requires();
             let mut matches = true;
             for tag in tags {
                 if !tag.matches(active_tags) {
@@ -36,7 +37,7 @@ impl ExecutionPlan {
         ExecutionPlan { actions: filtered }
     }
 
-    pub fn sort_by_dependency(&self) -> ExecutionPlan {
+    pub fn sort_by_requires(&self) -> ExecutionPlan {
         let mut sorted = Vec::new();
         let mut seen = HashSet::new();
         fn visit(
@@ -48,8 +49,13 @@ impl ExecutionPlan {
             if seen.contains(&a.id()) {
                 return;
             }
-            for dep in a.dependencies() {
-                if let Some(dep_a) = actions.iter().find(|x| &x.id() == dep) {
+            for dep in a.requires() {
+                let RequireTag::Positive(dep) = dep else {
+                    // Skip negative dependencies
+                    continue;
+                };
+                let tag = Tag::from_str(dep).unwrap();
+                if let Some(dep_a) = actions.iter().find(|x| x.provides_tag(&tag)) {
                     visit(dep_a, actions, seen, sorted);
                 }
             }
@@ -59,9 +65,7 @@ impl ExecutionPlan {
         for a in self.actions.iter() {
             visit(a, self, &mut seen, &mut sorted);
         }
-        ExecutionPlan {
-            actions: sorted.into_iter().rev().collect(),
-        }
+        ExecutionPlan { actions: sorted }
     }
 
     pub fn execute_actions(&self) -> Vec<(String, Result<(), ActionError>)> {
@@ -85,8 +89,7 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
 
 pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<Arc<dyn crate::Action>> = Vec::new();
-    for (_, cfg) in &global_config.subconfigs {
-        let depends = Vec::new();
+    for cfg in global_config.subconfigs.values() {
         for file in &cfg.files {
             let id = format!("link:{}:{}", cfg.path().display(), file.target);
             let source = cfg
@@ -100,7 +103,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 source,
                 file.target.clone(),
                 file.get_requires(cfg),
-                depends.clone(),
+                cfg.provides.clone(),
                 file.link,
             )));
         }
@@ -116,19 +119,87 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
             let Some(install_cmd) = install_cmd else {
                 return Err(ApplyError::InstallSourceNotFound(inst.name.clone()));
             };
+            let mut variables = inst.variables.clone();
+            variables.insert(
+                "hermit.root_dir".to_string(),
+                global_config.root_dir.to_string_lossy().to_string(),
+            );
+            variables.insert(
+                "hermit.this_dir".to_string(),
+                cfg.path().to_string_lossy().to_string(),
+            );
             actions.push(Arc::new(InstallAction::new(
                 id,
                 inst.name.clone(),
                 inst.get_requires(cfg),
-                depends.clone(),
+                cfg.provides.clone(),
                 inst.check_cmd.clone(),
                 inst.pre_install_cmd.clone(),
                 inst.post_install_cmd.clone(),
                 install_cmd.clone(),
                 inst.version.clone(),
-                inst.variables.clone(),
+                variables,
             )));
         }
     }
     Ok(ExecutionPlan { actions })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::config::GlobalConfig;
+
+    #[test]
+    fn test_create_execution_plan() {
+        let global_config = GlobalConfig::default();
+        let plan = create_execution_plan(&global_config);
+        assert!(plan.is_ok());
+        let plan = plan.unwrap();
+        assert!(!plan.actions.is_empty());
+    }
+
+    #[test]
+    fn test_topology_sorting() {
+        let link_action_a = Arc::new(crate::LinkAction::new(
+            "link:action_a".to_string(),
+            &PathBuf::from("/tmp/hermitgrab"),
+            PathBuf::from("/source/a"),
+            "target_a".to_string(),
+            BTreeSet::new(),
+            BTreeSet::from_iter(vec![Tag::from_str("tag_a").unwrap()]),
+            crate::LinkType::Soft,
+        ));
+        let link_action_b = Arc::new(crate::LinkAction::new(
+            "link:action_b".to_string(),
+            &PathBuf::from("/tmp/hermitgrab"),
+            "/source/b".into(),
+            "target_b".to_string(),
+            BTreeSet::from_iter(vec![RequireTag::Positive("tag_a".to_string())]),
+            BTreeSet::from_iter(vec![Tag::from_str("tag_b").unwrap()]),
+            crate::LinkType::Soft,
+        ));
+        let install_action = Arc::new(crate::InstallAction::new(
+            "install:action".to_string(),
+            "install_action".to_string(),
+            BTreeSet::from_iter(vec![RequireTag::Positive("tag_b".to_string())]),
+            BTreeSet::from_iter(vec![Tag::from_str("tag_install").unwrap()]),
+            None,
+            None,
+            None,
+            "install_cmd".to_string(),
+            None,
+            std::collections::BTreeMap::new(),
+        ));
+        let actions: Vec<ArcAction> = vec![install_action, link_action_a, link_action_b];
+        let plan = ExecutionPlan { actions };
+        assert_eq!(plan.actions.len(), 3);
+        let sorted_actions = plan.sort_by_requires();
+        assert_eq!(sorted_actions.actions.len(), plan.actions.len());
+        assert_eq!(sorted_actions.actions[0].id(), "link:action_a");
+        assert_eq!(sorted_actions.actions[1].id(), "link:action_b");
+        assert_eq!(sorted_actions.actions[2].id(), "install:action");
+    }
 }

@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     HermitConfig, LinkType, RequireTag, choice,
@@ -6,7 +9,6 @@ use crate::{
     config::{CONF_FILE_NAME, GlobalConfig, Tag},
     hermit_dir,
     hermitgrab_error::AddError,
-    info,
 };
 
 pub(crate) fn add_target_dir(
@@ -21,7 +23,7 @@ pub(crate) fn add_target_dir(
 pub(crate) fn add_link(
     global_config: &GlobalConfig,
     target_dir: &Option<String>,
-    source: &PathBuf,
+    source: &Path,
     link_type: &LinkType,
     destination: &Option<String>,
     required_tags: &[RequireTag],
@@ -29,7 +31,7 @@ pub(crate) fn add_link(
     let target_dir = if let Some(target_dir) = target_dir {
         PathBuf::from(target_dir)
     } else {
-        let absolute_source = source.canonicalize().unwrap_or(source.clone());
+        let absolute_source = source.canonicalize().unwrap_or(source.to_path_buf());
         println!("Absolute source path: {}", absolute_source.display());
         let last_segment = if absolute_source.is_dir() {
             absolute_source

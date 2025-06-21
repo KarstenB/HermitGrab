@@ -1,8 +1,0 @@
-provides:
-  - bat
-install:
-  - name: sharkdp/bat
-    check_cmd: command -v bat
-    source: ubi
-    variables:
-      exe: bat

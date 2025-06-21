@@ -29,7 +29,9 @@ pub enum ConfigLoadError {
     #[error("An error occurred while loading the configuration file {1}: {0}")]
     IoError(std::io::Error, PathBuf),
     #[error("An error occurred while parsing the configuration file {1}: {0}")]
-    SerdeYmlError(serde_yml::Error, PathBuf),
+    DeserializeTomlError(toml::de::Error, PathBuf),
+    #[error("An error occurred while serializing the configuration file {1}: {0}")]
+    SerializeTomlError(toml::ser::Error, PathBuf),
     #[error("Duplicate profile found: {0} in file {1}")]
     DuplicateProfile(String, PathBuf),
 }

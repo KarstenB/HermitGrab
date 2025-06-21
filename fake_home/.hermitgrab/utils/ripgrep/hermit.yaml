@@ -1,8 +1,0 @@
-provides:
-  - ripgrep
-install:
-  - name: BurntSushi/ripgrep
-    check_cmd: command -v rg
-    source: ubi
-    variables:
-      exe: rg
