@@ -52,6 +52,10 @@ pub enum AddError {
     SourceNotFound(PathBuf),
     #[error("Expected a table at key {0}, but found {1}")]
     ExpectedTable(String, String),
+    #[error("Expected an array at key {0}, but found {1}")]
+    ExpectedArray(String, String),
+    #[error("Expected a string at key {0}, but found {1}")]
+    ExpectedString(String, String),
     #[error(transparent)]
     TomlSerializationError(#[from] toml::ser::Error),
     #[error(transparent)]

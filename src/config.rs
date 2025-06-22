@@ -434,7 +434,7 @@ impl GlobalConfig {
         Ok(profile_to_use)
     }
 
-    pub(crate) fn root_config(&self) -> Option<&HermitConfig> {
+    pub fn root_config(&self) -> Option<&HermitConfig> {
         let root_path = self.root_dir.join(CONF_FILE_NAME);
         self.subconfigs
             .get(&root_path.to_string_lossy().to_string())

@@ -1,20 +1,20 @@
+use itertools::Itertools;
 use std::{
     collections::BTreeSet,
     iter::FromIterator,
     path::{Path, PathBuf},
 };
-
-use toml_edit::{ArrayOfTables, Item, Value};
+use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 
 use crate::{
     DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag, choice,
     common_cli::{hint, prompt},
-    config::{CONF_FILE_NAME, GlobalConfig, Source::CommandLine, Tag, load_hermit_config_editable},
+    config::{CONF_FILE_NAME, Source::CommandLine, Tag, load_hermit_config_editable},
     error, hermit_dir,
     hermitgrab_error::AddError,
     info,
     links_files::copy,
-    user_home,
+    success, user_home,
 };
 
 pub(crate) fn add_config(
@@ -172,8 +172,8 @@ pub(crate) fn add_link(
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
     };
-    let table = to_table(&file_entry)?;
     if config_file.exists() {
+        let table = to_table(&file_entry)?;
         let mut config = load_hermit_config_editable(&config_file)?;
         let files = config["files"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
         match files {
@@ -230,21 +230,67 @@ fn to_table(file_entry: &DotfileEntry) -> Result<toml_edit::Table, AddError> {
     Ok(table)
 }
 
-pub(crate) fn add_profile(
-    global_config: &GlobalConfig,
-    name: &str,
-    tags: &[Tag],
-) -> Result<(), AddError> {
-    let root_config = global_config.root_config();
-    let mut config = if let Some(config) = root_config {
-        config.clone()
-    } else {
-        HermitConfig::default()
-    };
-    config
-        .profiles
-        .insert(name.to_string(), BTreeSet::from_iter(tags.iter().cloned()));
-    config.save_to_file(&hermit_dir().join(CONF_FILE_NAME))?;
+pub(crate) fn add_profile(name: &str, tags: &[Tag]) -> Result<(), AddError> {
+    let config_file = hermit_dir().join(CONF_FILE_NAME);
+    info!("Updating profiles in {config_file:?}");
+    let mut config = load_hermit_config_editable(&config_file)?;
+    let profiles = config["profiles"].or_insert(Item::Table(Table::new()));
+    match profiles {
+        Item::Table(t) => {
+            let entry = t.get_mut(name);
+            match entry {
+                None | Some(Item::None) => {
+                    let new_tags = BTreeSet::from_iter(tags.iter().map(|t| t.name()));
+                    let mut arr = Array::new();
+                    for tag in &new_tags {
+                        arr.push(Value::String(Formatted::new(tag.to_string())));
+                    }
+                    t.insert(name, Item::Value(Value::Array(arr)));
+                    success!(
+                        "Added new profile {name} with tags '{}'",
+                        new_tags.iter().join(",")
+                    );
+                }
+                Some(Item::Value(Value::Array(arr))) => {
+                    let mut new_tags = BTreeSet::from_iter(tags.iter().map(|t| t.name()));
+                    for (idx, item) in arr.iter().enumerate() {
+                        match item {
+                            Value::String(val) => {
+                                new_tags.remove(val.value().as_str());
+                            }
+                            _ => {
+                                return Err(AddError::ExpectedString(
+                                    format!("profiles.{name}[{idx}]"),
+                                    item.type_name().to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    for tag in &new_tags {
+                        arr.push(Value::String(Formatted::new(tag.to_string())));
+                    }
+                    success!(
+                        "Updated existing profile {name} with additional tags '{}'",
+                        new_tags.iter().join(",")
+                    );
+                }
+                _ => {
+                    return Err(AddError::ExpectedArray(
+                        format!("profiles.{name}"),
+                        entry.expect("None is checked").type_name().to_string(),
+                    ));
+                }
+            }
+        }
+        _ => {
+            return Err(AddError::ExpectedTable(
+                "profiles".to_string(),
+                profiles.type_name().to_string(),
+            ));
+        }
+    }
+    let new_config = config.to_string();
+    std::fs::write(config_file, new_config)?;
     Ok(())
 }
 

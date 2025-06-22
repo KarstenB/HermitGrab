@@ -284,7 +284,7 @@ async fn main() -> Result<()> {
                 )?;
             }
             AddCommand::Profile { ref name, ref tags } => {
-                cmd_add::add_profile(&global_config, name, tags)?;
+                cmd_add::add_profile(name, tags)?;
             }
         },
         Commands::Apply {
