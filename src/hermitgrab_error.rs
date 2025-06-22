@@ -39,6 +39,8 @@ pub enum ConfigLoadError {
 }
 
 #[derive(Debug, Error)]
+pub enum StatusError {}
+#[derive(Debug, Error)]
 pub enum AddError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),

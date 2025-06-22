@@ -9,6 +9,7 @@ pub mod cmd_apply;
 #[cfg(feature = "interactive")]
 pub mod cmd_apply_tui;
 pub mod cmd_init;
+pub mod cmd_status;
 pub mod common_cli;
 pub mod config;
 pub mod detector;
@@ -303,8 +304,7 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Status => {
-            hermitgrab_info("Status:");
-            // TODO: Implement status reporting
+            cmd_status::get_status(&global_config)?;
         }
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {

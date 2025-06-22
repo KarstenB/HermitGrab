@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::DocumentMut;
 
+use crate::action::expand_directory;
 use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
@@ -266,6 +267,73 @@ fn is_default(link_type: &LinkType) -> bool {
     matches!(link_type, LinkType::Soft)
 }
 
+#[derive(Debug)]
+pub enum FileStatus {
+    Ok,
+    DestinationNotSymLink(PathBuf),
+    FailedToReadSymlink(PathBuf),
+    SymlinkDestinationMismatch(PathBuf, PathBuf),
+    DestinationDoesNotExist(PathBuf),
+    FailedToGetMetadata(PathBuf),
+    InodeMismatch(PathBuf),
+    SizeDiffers(PathBuf, u64, u64),
+    FailedToAccessFile(PathBuf, std::io::Error),
+    FailedToTraverseDir(PathBuf, std::io::Error),
+    SrcIsFileButTargetIsDir(PathBuf),
+    SrcIsDirButTargetIsFile(PathBuf),
+}
+impl FileStatus {
+    pub fn is_ok(&self) -> bool {
+        matches!(self, Self::Ok)
+    }
+}
+impl Display for FileStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileStatus::Ok => f.write_str("OK"),
+            FileStatus::DestinationNotSymLink(path_buf) => write!(
+                f,
+                "The destination {path_buf:?} is not a symlink to the expected source"
+            ),
+            FileStatus::FailedToReadSymlink(path_buf) => {
+                write!(f, "Failed to read symlink destination of file {path_buf:?}")
+            }
+            FileStatus::SymlinkDestinationMismatch(path_buf, link) => {
+                write!(f, "The destination {path_buf:?} links to {link:?}")
+            }
+            FileStatus::DestinationDoesNotExist(path_buf) => {
+                write!(f, "The destination {path_buf:?} does not exist")
+            }
+            FileStatus::FailedToGetMetadata(path_buf) => {
+                write!(f, "Failed to get metadata for the file {path_buf:?}")
+            }
+            FileStatus::InodeMismatch(path_buf) => {
+                write!(f, "The file {path_buf:?} is not hardlinked to the source")
+            }
+            FileStatus::SizeDiffers(path_buf, src_size, dst_size) => write!(
+                f,
+                "The target file {path_buf:?} differ in size {dst_size} (dst) vs {src_size} (src)"
+            ),
+            FileStatus::FailedToAccessFile(path_buf, error) => write!(
+                f,
+                "Failed to access the file {path_buf:?}, error was {error}"
+            ),
+            FileStatus::FailedToTraverseDir(path_buf, error) => write!(
+                f,
+                "Failed to traverse the directory {path_buf:?}, error was {error}"
+            ),
+            FileStatus::SrcIsFileButTargetIsDir(path_buf) => write!(
+                f,
+                "Src is a file, but destination {path_buf:?} is a directory"
+            ),
+            FileStatus::SrcIsDirButTargetIsFile(path_buf) => write!(
+                f,
+                "Src is a directory, but destination {path_buf:?} is a file"
+            ),
+        }
+    }
+}
+
 impl DotfileEntry {
     pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
@@ -276,6 +344,103 @@ impl DotfileEntry {
             requires.insert(tag.clone());
         }
         requires
+    }
+
+    pub(crate) fn check(&self, cfg_dir: &Path, quick: bool) -> FileStatus {
+        let src_file = cfg_dir.join(&self.source);
+        let src_file = src_file.canonicalize().unwrap_or(src_file);
+        let actual_dst = PathBuf::from(expand_directory(&self.target));
+        match actual_dst.try_exists() {
+            Ok(exists) => {
+                if !exists {
+                    return FileStatus::DestinationDoesNotExist(actual_dst);
+                }
+            }
+            Err(e) => return FileStatus::FailedToAccessFile(actual_dst, e),
+        }
+        match self.link {
+            LinkType::Soft => {
+                if !actual_dst.is_symlink() {
+                    return FileStatus::DestinationNotSymLink(actual_dst);
+                }
+                let read_link = std::fs::read_link(&actual_dst);
+                let Ok(read_link) = read_link else {
+                    return FileStatus::FailedToReadSymlink(actual_dst);
+                };
+                if read_link != src_file {
+                    return FileStatus::SymlinkDestinationMismatch(actual_dst, read_link);
+                }
+                FileStatus::Ok
+            }
+            LinkType::Hard => {
+                let Ok(dst_meta) = actual_dst.metadata() else {
+                    return FileStatus::FailedToGetMetadata(actual_dst);
+                };
+                let Ok(src_meta) = src_file.metadata() else {
+                    return FileStatus::FailedToGetMetadata(src_file);
+                };
+                use std::os::unix::fs::MetadataExt;
+                let dst_ino = dst_meta.ino();
+                let src_ino = src_meta.ino();
+                if src_ino != dst_ino {
+                    return FileStatus::InodeMismatch(actual_dst);
+                }
+                FileStatus::Ok
+            }
+            LinkType::Copy => check_copied(quick, src_file, actual_dst),
+        }
+    }
+}
+
+fn check_copied(quick: bool, src_file: PathBuf, actual_dst: PathBuf) -> FileStatus {
+    match actual_dst.try_exists() {
+        Ok(exists) => {
+            if !exists {
+                return FileStatus::DestinationDoesNotExist(actual_dst);
+            }
+        }
+        Err(e) => return FileStatus::FailedToAccessFile(actual_dst, e),
+    }
+    if actual_dst.is_file() {
+        if !src_file.is_file() {
+            return FileStatus::SrcIsDirButTargetIsFile(actual_dst);
+        }
+        let Ok(dst_meta) = actual_dst.metadata() else {
+            return FileStatus::FailedToGetMetadata(actual_dst);
+        };
+        let Ok(src_meta) = src_file.metadata() else {
+            return FileStatus::FailedToGetMetadata(src_file);
+        };
+        if src_meta.len() != dst_meta.len() {
+            return FileStatus::SizeDiffers(actual_dst, src_meta.len(), dst_meta.len());
+        }
+        if !quick {
+            todo!("blake3 the contents and determine mismatch")
+        }
+        FileStatus::Ok
+    } else {
+        if !src_file.is_dir() {
+            return FileStatus::SrcIsFileButTargetIsDir(actual_dst);
+        }
+        match src_file.read_dir() {
+            Ok(e) => {
+                for f in e {
+                    let fs = match f {
+                        Ok(file) => {
+                            check_copied(quick, file.path(), actual_dst.join(file.file_name()))
+                        }
+                        Err(e) => return FileStatus::FailedToTraverseDir(src_file, e),
+                    };
+                    if !fs.is_ok() {
+                        return fs;
+                    }
+                }
+            }
+            Err(e) => {
+                return FileStatus::FailedToTraverseDir(src_file, e);
+            }
+        }
+        FileStatus::Ok
     }
 }
 
