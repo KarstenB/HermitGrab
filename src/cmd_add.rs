@@ -38,7 +38,7 @@ pub(crate) fn add_config(
     };
     config.provides.extend(provided_tags);
     config.requires.extend(required_tags.to_vec());
-    config.files.extend(files.to_vec());
+    config.file.extend(files.to_vec());
     config.install.extend(installs.to_vec());
     std::fs::create_dir_all(target_dir)?;
     config.save_to_file(&config_file)?;

@@ -184,7 +184,10 @@ pub struct HermitConfig {
     pub provides: BTreeSet<Tag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub files: Vec<DotfileEntry>,
+    pub file: Vec<DotfileEntry>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub patch: Vec<PatchfileEntry>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub install: Vec<InstallEntry>,
@@ -251,19 +254,55 @@ impl Display for LinkType {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum PatchType {
+    JsonMerge,
+    JsonPatch,
+}
+
+impl Display for PatchType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PatchType::JsonMerge => write!(f, "JsonMerge"),
+            PatchType::JsonPatch => write!(f, "JsonPatch"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PatchfileEntry {
+    pub source: String,
+    pub target: String,
+    #[serde(rename = "type")]
+    pub patch_type: PatchType,
+    pub requires: BTreeSet<RequireTag>,
+}
+impl PatchfileEntry {
+    pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
+        let mut requires = self.requires.clone();
+        for tag in cfg.provides.iter() {
+            requires.insert(RequireTag::Positive(tag.0.clone()));
+        }
+        for tag in &cfg.requires {
+            requires.insert(tag.clone());
+        }
+        requires
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct DotfileEntry {
     pub source: String,
     pub target: String,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
+    #[serde(skip_serializing_if = "is_default_link")]
     pub link: LinkType,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
 }
 
-fn is_default(link_type: &LinkType) -> bool {
+fn is_default_link(link_type: &LinkType) -> bool {
     matches!(link_type, LinkType::Soft)
 }
 

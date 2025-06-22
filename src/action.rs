@@ -7,10 +7,12 @@ use std::sync::Mutex;
 
 use crate::LinkType;
 use crate::RequireTag;
+use crate::config::PatchType;
 use crate::config::Tag;
 use crate::hermitgrab_error::ActionError;
 use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
+use crate::hermitgrab_error::PatchActionError;
 use crate::links_files;
 use handlebars::Handlebars;
 
@@ -144,6 +146,109 @@ impl Action for LinkAction {
             .map_err(LinkActionError::AtomicLinkError)?;
         Ok(())
     }
+}
+
+pub struct PatchAction {
+    id: String,
+    rel_src: String,
+    rel_dst: String,
+    src: PathBuf,
+    dst: String,
+    patch_type: PatchType,
+    requires: Vec<RequireTag>,
+    provides: Vec<Tag>,
+}
+
+impl PatchAction {
+    pub(crate) fn new(
+        id: String,
+        config_dir: &PathBuf,
+        src: PathBuf,
+        dst: String,
+        requires: BTreeSet<RequireTag>,
+        provides: BTreeSet<Tag>,
+        patch_type: PatchType,
+    ) -> Self {
+        let rel_src = src
+            .strip_prefix(config_dir)
+            .unwrap_or(&src)
+            .to_string_lossy()
+            .to_string();
+        let rel_dst = expand_directory(&dst);
+        let rel_dst = rel_dst
+            .strip_prefix(shellexpand::tilde("~/").as_ref())
+            .unwrap_or(&rel_dst)
+            .to_string();
+
+        Self {
+            id,
+            src,
+            rel_src,
+            dst,
+            rel_dst,
+            patch_type,
+            requires: requires.into_iter().collect(),
+            provides: provides.into_iter().collect(),
+        }
+    }
+}
+
+impl Action for PatchAction {
+    fn short_description(&self) -> String {
+        format!("{} {} with {}", self.patch_type, self.rel_dst, self.rel_src)
+    }
+
+    fn long_description(&self) -> String {
+        format!("{} {} with {:?}", self.patch_type, self.dst, self.src)
+    }
+
+    fn requires(&self) -> &[RequireTag] {
+        &self.requires
+    }
+    fn provides(&self) -> &[Tag] {
+        &self.provides
+    }
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn execute(&self) -> Result<(), ActionError> {
+        match self.patch_type {
+            PatchType::JsonMerge => {
+                let dst = expand_directory(&self.dst);
+                merge_json(&self.src, PathBuf::from(dst))?;
+                Ok(())
+            }
+            PatchType::JsonPatch => todo!(),
+        }
+    }
+}
+
+pub fn merge_json(src: &PathBuf, dst: PathBuf) -> Result<ActionOutput, PatchActionError> {
+    let merge_content = std::fs::read_to_string(src)?;
+    let dst_content = std::fs::read_to_string(&dst).map_err(PatchActionError::IoError)?;
+    let merge_json: serde_json::Value = serde_json::from_str(&merge_content)?;
+    let mut dst_json: serde_json::Value = serde_json::from_str(&dst_content)?;
+    json_patch::merge(&mut dst_json, &merge_json);
+    let updated_dst = serde_json::to_string_pretty(&dst_json)?;
+    std::fs::write(&dst, updated_dst)?;
+    Ok(ActionOutput::new(
+        format!("Merged the contents of {src:?} into {dst:?}"),
+        String::new(),
+    ))
+}
+pub fn patch_json(src: &PathBuf, dst: PathBuf) -> Result<ActionOutput, PatchActionError> {
+    let merge_content = std::fs::read_to_string(src)?;
+    let dst_content = std::fs::read_to_string(&dst).map_err(PatchActionError::IoError)?;
+    let patch: json_patch::Patch = serde_json::from_str(&merge_content)?;
+    let mut dst_json: serde_json::Value = serde_json::from_str(&dst_content)?;
+    json_patch::patch(&mut dst_json, &patch)?;
+    let updated_dst = serde_json::to_string_pretty(&dst_json)?;
+    std::fs::write(&dst, updated_dst)?;
+    Ok(ActionOutput::new(
+        format!("Merged the contents of {src:?} into {dst:?}"),
+        String::new(),
+    ))
 }
 
 pub struct InstallAction {

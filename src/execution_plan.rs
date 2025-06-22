@@ -5,7 +5,8 @@ use std::{
 };
 
 use crate::{
-    Action, InstallAction, RequireTag,
+    Action, InstallAction, LinkAction, RequireTag,
+    action::PatchAction,
     config::{GlobalConfig, Tag},
     hermitgrab_error::{ActionError, ApplyError},
 };
@@ -90,14 +91,14 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
 pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<Arc<dyn crate::Action>> = Vec::new();
     for cfg in global_config.subconfigs.values() {
-        for file in &cfg.files {
+        for file in &cfg.file {
             let id = format!("link:{}:{}", cfg.path().display(), file.target);
             let source = cfg
                 .path()
                 .parent()
                 .expect("File should have a directory")
                 .join(&file.source);
-            actions.push(Arc::new(crate::LinkAction::new(
+            actions.push(Arc::new(LinkAction::new(
                 id,
                 &global_config.root_dir,
                 source,
@@ -105,6 +106,23 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 file.get_requires(cfg),
                 cfg.provides.clone(),
                 file.link,
+            )));
+        }
+        for patch in &cfg.patch {
+            let id = format!("link:{}:{}", cfg.path().display(), patch.target);
+            let source = cfg
+                .path()
+                .parent()
+                .expect("File should have a directory")
+                .join(&patch.source);
+            actions.push(Arc::new(PatchAction::new(
+                id,
+                &global_config.root_dir,
+                source,
+                patch.target.clone(),
+                patch.get_requires(cfg),
+                cfg.provides.clone(),
+                patch.patch_type.clone(),
             )));
         }
         for inst in &cfg.install {

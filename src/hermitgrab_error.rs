@@ -40,6 +40,17 @@ pub enum ConfigLoadError {
 
 #[derive(Debug, Error)]
 pub enum StatusError {}
+
+#[derive(Debug, Error)]
+pub enum PatchActionError {
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error),
+    #[error(transparent)]
+    PatchError(#[from] json_patch::PatchError),
+}
+
 #[derive(Debug, Error)]
 pub enum AddError {
     #[error(transparent)]
@@ -96,6 +107,8 @@ pub enum ActionError {
     LinkActionError(#[from] LinkActionError),
     #[error(transparent)]
     InstallActionError(#[from] InstallActionError),
+    #[error(transparent)]
+    PatchActionError(#[from] PatchActionError),
 }
 
 #[derive(Debug, Error)]
