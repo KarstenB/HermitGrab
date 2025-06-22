@@ -959,6 +959,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "toml",
+ "toml_edit",
  "ubi",
  "unicode-width 0.2.0",
  "which 8.0.0",

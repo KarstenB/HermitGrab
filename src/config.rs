@@ -6,6 +6,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use toml_edit::DocumentMut;
 
 use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
@@ -249,7 +250,7 @@ impl Display for LinkType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct DotfileEntry {
     pub source: String,
     pub target: String,
@@ -262,10 +263,7 @@ pub struct DotfileEntry {
 }
 
 fn is_default(link_type: &LinkType) -> bool {
-    match link_type {
-        LinkType::Soft => true,
-        _ => false,
-    }
+    matches!(link_type, LinkType::Soft)
 }
 
 impl DotfileEntry {
@@ -452,7 +450,17 @@ pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, Confi
     Ok(config)
 }
 
-pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
+pub fn load_hermit_config_editable<P: AsRef<Path>>(
+    path: P,
+) -> Result<DocumentMut, ConfigLoadError> {
+    let content = std::fs::read_to_string(path.as_ref())
+        .map_err(|e| ConfigLoadError::IoError(e, path.as_ref().to_path_buf()))?;
+    content
+        .parse::<DocumentMut>()
+        .map_err(|e| ConfigLoadError::DeserializeDocumentTomlError(e, path.as_ref().to_path_buf()))
+}
+
+pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     if root.is_file() && root.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
         result.push(root.to_path_buf());
@@ -461,7 +469,7 @@ pub fn find_hermit_yaml_files(root: &Path) -> Vec<PathBuf> {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    result.extend(find_hermit_yaml_files(&path));
+                    result.extend(find_hermit_files(&path));
                 } else if path.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
                     result.push(path);
                 }

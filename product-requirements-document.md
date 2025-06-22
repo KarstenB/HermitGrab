@@ -24,13 +24,13 @@
 
 #### **3.2. Configuration**
 
-* **Configuration Files:** At any level of the directory structure, a `hermit.yaml` or `hermit.toml` file can be created to define how files and directories within that location should be handled.
+* **Configuration Files:** At any level of the directory structure, a `hermit.toml` or `hermit.toml` file can be created to define how files and directories within that location should be handled.
 * **Link Types:** The configuration file will allow users to specify one of the following actions for each file or directory:
     * **Soft Link:** Creates a symbolic link to the target location.
     * **Hard Link:** Creates a hard link to the target location.
     * **Copy:** Copies the file or directory to the target location.
 * **Tagging System:**
-    * Users can define **tags** within the `hermit.yaml` or `hermit.toml` files to conditionally enable or disable certain configurations.
+    * Users can define **tags** within the `hermit.toml` or `hermit.toml` files to conditionally enable or disable certain configurations.
     * Example tags include:
         * **By Role:** `work`, `personal`
         * **By OS:** `windows`, `macos`, `linux`

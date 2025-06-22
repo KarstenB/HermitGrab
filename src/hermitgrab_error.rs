@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{PathBuf, StripPrefixError};
 
 use thiserror::Error;
 
@@ -34,6 +34,8 @@ pub enum ConfigLoadError {
     SerializeTomlError(toml::ser::Error, PathBuf),
     #[error("Duplicate profile found: {0} in file {1}")]
     DuplicateProfile(String, PathBuf),
+    #[error("Failed to deserialize document in TOML format: {0} in file {1}")]
+    DeserializeDocumentTomlError(toml_edit::TomlError, PathBuf),
 }
 
 #[derive(Debug, Error)]
@@ -46,6 +48,26 @@ pub enum AddError {
     NoHomeDir,
     #[error("Invalid choice")]
     InvalidChoice,
+    #[error("Failed to locate source: {0}")]
+    SourceNotFound(PathBuf),
+    #[error("Expected a table at key {0}, but found {1}")]
+    ExpectedTable(String, String),
+    #[error(transparent)]
+    TomlSerializationError(#[from] toml::ser::Error),
+    #[error(transparent)]
+    TomlDeserializationError(#[from] toml::de::Error),
+    #[error(transparent)]
+    TomlEditSerializationError(#[from] toml_edit::ser::Error),
+    #[error(transparent)]
+    TomlEditDeserializationError(#[from] toml_edit::de::Error),
+    #[error("Internal conversion error")]
+    TomlConversion,
+    #[error("Failed to get filename")]
+    FileNameError,
+    #[error("Failed to strip prefix")]
+    StripPrefixError(#[from] StripPrefixError),
+    #[error("A source with the file {0} already exists")]
+    SourceAlreadyExists(String),
 }
 
 #[derive(Debug, Error)]

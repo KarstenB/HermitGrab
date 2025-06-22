@@ -21,7 +21,7 @@ pub mod ubi_int;
 pub use crate::action::{Action, InstallAction, LinkAction};
 use crate::common_cli::{hermitgrab_info, info};
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
-use crate::config::{Tag, find_hermit_yaml_files};
+use crate::config::{Tag, find_hermit_files};
 pub use crate::hermitgrab_error::AtomicLinkError;
 pub use std::collections::HashSet;
 use std::path::PathBuf;
@@ -57,20 +57,19 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum AddCommand {
-    TargetDir {
-        /// Subdirectory of the hermit.yaml file to add the target directory to
-        #[arg(short, long)]
-        target_dir: Option<String>,
+    Config {
+        /// Subdirectory of the hermit.toml file to add the target directory to
+        target_dir: PathBuf,
         /// Tags this config provides
-        #[arg(short = 't', long = "tag", value_name = "TAG", num_args = 0..)]
-        tags: Vec<String>,
-        /// Tags this config requires
-        #[arg(short = 'r', long = "require-tag", value_name = "TAG", num_args = 0..)]
+        #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 1..)]
+        tags: Vec<Tag>,
+        /// Tags this config requires for all of its links and other actions
+        #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
     },
     /// Add a new Link to the config
     Link {
-        /// Subdirectory of the hermit.yaml file to add the link to
+        /// Subdirectory of the hermit.toml file to add the link to
         #[arg(long)]
         target_dir: Option<String>,
         /// Source file or directory to link
@@ -79,12 +78,15 @@ enum AddCommand {
         #[arg(short = 'l', long, default_value = "soft", value_enum)]
         link_type: LinkType,
         /// Destination path for the link, if not specified, uses the source name
-        #[arg(short, long)]
+        #[arg(short = 'd', long)]
         destination: Option<String>,
         /// Required tags to include in the link (can be specified multiple times).
         /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
         #[arg(short = 't', long = "tag", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
+        /// Provided tags in case a new config file will be created, i.e. destination does not yet exist.
+        #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 0..)]
+        provided_tags: Vec<Tag>,
     },
     /// Add a new profile to the config
     Profile {
@@ -185,6 +187,16 @@ enum Commands {
 }
 
 static SEARCH_ROOT: OnceLock<PathBuf> = OnceLock::new();
+static USER_HOME: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn user_home() -> PathBuf {
+    USER_HOME
+        .get_or_init(|| {
+            let user_dirs = UserDirs::new().expect("Could not get user directories");
+            user_dirs.home_dir().to_path_buf()
+        })
+        .to_path_buf()
+}
 
 fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
     if let Some(path) = cli_path {
@@ -211,7 +223,7 @@ async fn main() -> Result<()> {
     // simple_logger::init_with_env().unwrap();
     let cli = Cli::parse();
     let search_root = SEARCH_ROOT.get_or_init(|| init_hermit_dir(&cli.hermit_dir));
-    let yaml_files = find_hermit_yaml_files(search_root);
+    let yaml_files = find_hermit_files(search_root);
     let global_config = config::GlobalConfig::from_paths(search_root, &yaml_files)?;
     match cli.command {
         Commands::Init { init_command } => match init_command {
@@ -247,12 +259,12 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Add { add_command } => match add_command {
-            AddCommand::TargetDir {
+            AddCommand::Config {
                 ref target_dir,
                 ref tags,
                 ref required_tags,
             } => {
-                cmd_add::add_target_dir(&global_config, target_dir, tags, required_tags)?;
+                cmd_add::add_config(target_dir, tags, required_tags, &[], &[])?;
             }
             AddCommand::Link {
                 ref target_dir,
@@ -260,14 +272,15 @@ async fn main() -> Result<()> {
                 ref link_type,
                 ref destination,
                 ref required_tags,
+                ref provided_tags,
             } => {
                 cmd_add::add_link(
-                    &global_config,
                     target_dir,
                     source,
                     link_type,
                     destination,
                     required_tags,
+                    provided_tags,
                 )?;
             }
             AddCommand::Profile { ref name, ref tags } => {

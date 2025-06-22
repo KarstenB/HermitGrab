@@ -359,11 +359,6 @@ fn insert_ubi_into_path() -> Result<String, std::io::Error> {
         "#,
             std::env::current_exe()?.display()
         );
-        println!(
-            "Writing ubi script to: {}, new PATH: {}",
-            ubi_exe.display(),
-            path
-        );
         std::fs::write(&ubi_exe, script)?;
         #[cfg(unix)]
         {

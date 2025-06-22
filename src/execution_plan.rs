@@ -49,6 +49,7 @@ impl ExecutionPlan {
             if seen.contains(&a.id()) {
                 return;
             }
+            seen.insert(a.id());
             for dep in a.requires() {
                 let RequireTag::Positive(dep) = dep else {
                     // Skip negative dependencies
@@ -59,7 +60,6 @@ impl ExecutionPlan {
                     visit(dep_a, actions, seen, sorted);
                 }
             }
-            seen.insert(a.id());
             sorted.push(a.clone());
         }
         for a in self.actions.iter() {

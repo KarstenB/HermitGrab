@@ -21,7 +21,6 @@
             },
             "args": [
                 "apply",
-
             ],
             "env": {
                 "HOME": "${workspaceFolder}/fake_home"

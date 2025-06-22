@@ -1,4 +1,5 @@
 use crate::hermitgrab_error::AtomicLinkError;
+use crate::info;
 use std::fs::{self, hard_link};
 use std::path::Path;
 
@@ -51,7 +52,26 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
             hard_link(src, dst)?;
         }
         crate::LinkType::Copy => {
-            fs::copy(src, dst)?;
+            copy(src, dst)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn copy(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if src.is_file() {
+        if let Some(parent) = dst.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        info!("Copying file {src:?} to {dst:?}");
+        std::fs::copy(src, dst)?;
+    } else {
+        info!("Copying dir {src:?} to {dst:?}");
+        for file in src.read_dir()? {
+            let entry = file?;
+            copy(&entry.path(), dst.join(entry.file_name()).as_path())?;
         }
     }
     Ok(())

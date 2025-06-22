@@ -12,7 +12,7 @@ HermitGrab automatically detects and adds the following tags based on your envir
 - **OS Version:** The numeric OS version (e.g., `24.04`, `12.7.1`)
 - **OS Version Nickname:** The OS version codename or nickname (e.g., `bookworm`, `Noble Numbat`, `Sonoma`)
 
-These tags are available for use in your `hermit.yaml` or `hermit.toml` files to conditionally enable or disable configurations and installations.
+These tags are available for use in your  `hermit.toml` files to conditionally enable or disable configurations and installations.
 
 ## MVP Usage
 
@@ -34,7 +34,7 @@ hermitgrab apply
 hermitgrab status
 ```
 
-## Example `hermit.yaml`
+## Example `hermit.toml`
 
 ```yaml
 files:

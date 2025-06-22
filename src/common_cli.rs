@@ -25,6 +25,10 @@ pub fn error(msg: &str) {
 pub fn success(msg: &str) {
     println!("{} {}", "   [success]".bold().green(), msg.green());
 }
+pub fn hint(msg: &str) {
+    println!("{} {}", "      [hint]".bold().dark_grey(), msg.dark_grey());
+}
+
 pub fn stdout(msg: &str) {
     let lines = msg.lines().collect::<Vec<_>>();
     if lines.is_empty() {
