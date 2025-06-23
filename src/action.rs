@@ -24,11 +24,20 @@ pub fn expand_directory(dir: &str) -> String {
         .unwrap_or_else(|_| dir.to_string());
 
     if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
-        std::env::var("XDG_CONFIG_HOME").unwrap_or_default()
+        dir.replace(
+            "~/.config",
+            &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
+        )
     } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
-        std::env::var("XDG_DATA_HOME").unwrap_or_default()
+        dir.replace(
+            "~/.local/share",
+            &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
+        )
     } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
-        std::env::var("XDG_STATE_HOME").unwrap_or_default()
+        dir.replace(
+            "~/.local/state",
+            &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
+        )
     } else {
         shellexpand::tilde(&dir).to_string()
     }

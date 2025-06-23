@@ -1,0 +1,5 @@
+{
+    "id": "cross-rust",
+    "version": "0.1.0",
+    "description": "Compilation tools for cross compilation"
+}

@@ -20,7 +20,8 @@
 			"moby": false,
 			"dockerDashComposeVersion": "none",
 			"installDockerComposeSwitch": false
-		}
+		},
+		"./cross-rust": {}
 	},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
