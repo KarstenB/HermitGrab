@@ -106,6 +106,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 file.get_requires(cfg),
                 cfg.provides.clone(),
                 file.link,
+                file.fallback,
             )));
         }
         for patch in &cfg.patch {
@@ -139,12 +140,12 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
             };
             let mut variables = inst.variables.clone();
             variables.insert(
-                "hermit.root_dir".to_string(),
+                "hermit_root_dir".to_string(),
                 global_config.root_dir.to_string_lossy().to_string(),
             );
             variables.insert(
-                "hermit.this_dir".to_string(),
-                cfg.path().to_string_lossy().to_string(),
+                "hermit_this_dir".to_string(),
+                cfg.directory().to_string_lossy().to_string(),
             );
             actions.push(Arc::new(InstallAction::new(
                 id,
@@ -168,7 +169,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::config::GlobalConfig;
+    use crate::{LinkType, config::GlobalConfig, links_files::FallbackOperation};
 
     #[test]
     fn test_create_execution_plan() {
@@ -188,7 +189,8 @@ mod tests {
             "target_a".to_string(),
             BTreeSet::new(),
             BTreeSet::from_iter(vec![Tag::from_str("tag_a").unwrap()]),
-            crate::LinkType::Soft,
+            LinkType::Soft,
+            FallbackOperation::Abort,
         ));
         let link_action_b = Arc::new(crate::LinkAction::new(
             "link:action_b".to_string(),
@@ -197,7 +199,8 @@ mod tests {
             "target_b".to_string(),
             BTreeSet::from_iter(vec![RequireTag::Positive("tag_a".to_string())]),
             BTreeSet::from_iter(vec![Tag::from_str("tag_b").unwrap()]),
-            crate::LinkType::Soft,
+            LinkType::Soft,
+            FallbackOperation::Abort,
         ));
         let install_action = Arc::new(crate::InstallAction::new(
             "install:action".to_string(),

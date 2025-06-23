@@ -14,6 +14,7 @@ use crate::hermitgrab_error::InstallActionError;
 use crate::hermitgrab_error::LinkActionError;
 use crate::hermitgrab_error::PatchActionError;
 use crate::links_files;
+use crate::links_files::FallbackOperation;
 use handlebars::Handlebars;
 
 pub fn expand_directory(dir: &str) -> String {
@@ -79,6 +80,7 @@ pub struct LinkAction {
     link_type: LinkType,
     requires: Vec<RequireTag>,
     provides: Vec<Tag>,
+    fallback: FallbackOperation,
 }
 impl LinkAction {
     pub(crate) fn new(
@@ -89,6 +91,7 @@ impl LinkAction {
         requires: BTreeSet<RequireTag>,
         provides: BTreeSet<Tag>,
         link_type: LinkType,
+        fallback: FallbackOperation,
     ) -> Self {
         let rel_src = src
             .strip_prefix(config_dir)
@@ -110,6 +113,7 @@ impl LinkAction {
             link_type,
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
+            fallback,
         }
     }
 }
@@ -142,7 +146,7 @@ impl Action for LinkAction {
     }
     fn execute(&self) -> Result<(), ActionError> {
         let dst_str = expand_directory(&self.dst);
-        links_files::link_files(&self.src, dst_str, self.link_type)
+        links_files::link_files(&self.src, dst_str, &self.link_type, &self.fallback)
             .map_err(LinkActionError::AtomicLinkError)?;
         Ok(())
     }
@@ -226,7 +230,11 @@ impl Action for PatchAction {
 
 pub fn merge_json(src: &PathBuf, dst: PathBuf) -> Result<ActionOutput, PatchActionError> {
     let merge_content = std::fs::read_to_string(src)?;
-    let dst_content = std::fs::read_to_string(&dst).map_err(PatchActionError::IoError)?;
+    let dst_content = if dst.exists() {
+        std::fs::read_to_string(&dst).map_err(PatchActionError::IoError)?
+    } else {
+        "{}".to_string()
+    };
     let merge_json: serde_json::Value = serde_json::from_str(&merge_content)?;
     let mut dst_json: serde_json::Value = serde_json::from_str(&dst_content)?;
     json_patch::merge(&mut dst_json, &merge_json);
@@ -239,7 +247,11 @@ pub fn merge_json(src: &PathBuf, dst: PathBuf) -> Result<ActionOutput, PatchActi
 }
 pub fn patch_json(src: &PathBuf, dst: PathBuf) -> Result<ActionOutput, PatchActionError> {
     let merge_content = std::fs::read_to_string(src)?;
-    let dst_content = std::fs::read_to_string(&dst).map_err(PatchActionError::IoError)?;
+    let dst_content = if dst.exists() {
+        std::fs::read_to_string(&dst).map_err(PatchActionError::IoError)?
+    } else {
+        "{}".to_string()
+    };
     let patch: json_patch::Patch = serde_json::from_str(&merge_content)?;
     let mut dst_json: serde_json::Value = serde_json::from_str(&dst_content)?;
     json_patch::patch(&mut dst_json, &patch)?;
@@ -477,6 +489,18 @@ fn insert_ubi_into_path() -> Result<String, std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_handlebars_with_dot() {
+        let handlebars = handlebars::Handlebars::new();
+        let mut hash_map = HashMap::<String, String>::new();
+        hash_map.insert("hermit_thisdir".to_string(), "test".to_owned());
+        let dir = "{{hermit_thisdir}}/bla";
+        let dir = handlebars
+            .render_template(dir, &hash_map)
+            .unwrap_or_else(|_| dir.to_string());
+        assert_eq!(dir, "test/bla");
+    }
 
     #[test]
     fn test_script_execution() {

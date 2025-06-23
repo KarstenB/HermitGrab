@@ -12,6 +12,7 @@ use crate::action::expand_directory;
 use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
+use crate::links_files::FallbackOperation;
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
@@ -221,6 +222,10 @@ impl HermitConfig {
             .map_err(|e| ConfigLoadError::IoError(e, conf_file_name.clone()))?;
         Ok(())
     }
+
+    pub fn directory(&self) -> &Path {
+        self.path.parent().expect("Expected to get parent")
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy)]
@@ -300,6 +305,12 @@ pub struct DotfileEntry {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default_fallback")]
+    pub fallback: FallbackOperation,
+}
+fn is_default_fallback(fallback: &FallbackOperation) -> bool {
+    matches!(fallback, FallbackOperation::Abort)
 }
 
 fn is_default_link(link_type: &LinkType) -> bool {

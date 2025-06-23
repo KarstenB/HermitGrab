@@ -1,12 +1,50 @@
+use clap::ValueEnum;
+use clap::builder::PossibleValue;
+use serde::{Deserialize, Serialize};
+
 use crate::hermitgrab_error::AtomicLinkError;
-use crate::info;
+use crate::{LinkType, info};
+use std::ffi::OsString;
 use std::fs::{self, hard_link};
 use std::path::Path;
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum FallbackOperation {
+    #[default]
+    Abort,
+    Backup,
+    Delete,
+    DeleteDir,
+    BackupOverwrite,
+}
+
+impl ValueEnum for FallbackOperation {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            Self::Abort,
+            Self::Backup,
+            Self::BackupOverwrite,
+            Self::Delete,
+            Self::DeleteDir,
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            FallbackOperation::Abort => Some(PossibleValue::new("abort")),
+            FallbackOperation::Backup => Some(PossibleValue::new("backup")),
+            FallbackOperation::Delete => Some(PossibleValue::new("delete")),
+            FallbackOperation::DeleteDir => Some(PossibleValue::new("deletedir")),
+            FallbackOperation::BackupOverwrite => Some(PossibleValue::new("backupoverwrite")),
+        }
+    }
+}
 
 pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
     src: P,
     dst: Q,
-    link_type: crate::LinkType, // Currently unused, but can be extended for different link types
+    link_type: &LinkType,
+    fall_back: &FallbackOperation,
 ) -> Result<(), AtomicLinkError> {
     let src = src.as_ref();
     let dst = dst.as_ref();
@@ -20,14 +58,47 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
                 return Ok(());
             }
         }
-        // If destination is a file (not a symlink), abort
-        if dst.is_file() && !dst.is_symlink() {
-            return Err(AtomicLinkError::DestinationExists(
-                dst.display().to_string(),
-            ));
+        if !dst.is_symlink() {
+            match fall_back {
+                FallbackOperation::Abort => {
+                    return Err(AtomicLinkError::DestinationExists(
+                        dst.display().to_string(),
+                    ));
+                }
+                FallbackOperation::Backup => {
+                    let mut base_file_name = dst.file_name().expect("file name").to_os_string();
+                    base_file_name.push(OsString::from(".bak"));
+                    let backup_file = dst.with_file_name(base_file_name);
+                    if !backup_file.exists() {
+                        std::fs::rename(dst, &backup_file)?;
+                    } else {
+                        return Err(AtomicLinkError::BackupAlreadyExists(
+                            dst.display().to_string(),
+                        ));
+                    }
+                }
+                FallbackOperation::BackupOverwrite => {
+                    let mut base_file_name = dst.file_name().expect("file name").to_os_string();
+                    base_file_name.push(OsString::from(".bak"));
+                    let backup_file = dst.with_file_name(base_file_name);
+                    std::fs::rename(dst, &backup_file)?;
+                }
+                FallbackOperation::Delete => {
+                    if dst.is_dir() {
+                        std::fs::remove_dir(dst)?;
+                    } else {
+                        std::fs::remove_file(dst)?;
+                    }
+                }
+                FallbackOperation::DeleteDir => {
+                    if dst.is_dir() {
+                        std::fs::remove_dir_all(dst)?;
+                    } else {
+                        std::fs::remove_file(dst)?;
+                    }
+                }
+            }
         }
-        //TODO: Create a backup of the existing symlink/file to support rollback
-        fs::remove_file(dst)?;
     }
     let dst_parent = dst.parent();
     if let Some(dst_parent) = dst_parent {
@@ -36,7 +107,7 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
         }
     }
     match link_type {
-        crate::LinkType::Soft => {
+        LinkType::Soft => {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::symlink;
@@ -48,10 +119,10 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
                 symlink_file(src, dst)?;
             }
         }
-        crate::LinkType::Hard => {
+        LinkType::Hard => {
             hard_link(src, dst)?;
         }
-        crate::LinkType::Copy => {
+        LinkType::Copy => {
             copy(src, dst)?;
         }
     }
@@ -91,7 +162,7 @@ mod tests {
         let src = tmp_dir.join("hermitgrab_test_src");
         let dst = tmp_dir.join("hermitgrab_test_dst");
         fs::write(&src, b"test").unwrap();
-        link_files(&src, &dst, LinkType::Soft).unwrap();
+        link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort).unwrap();
         assert!(dst.exists());
         assert_eq!(fs::read_to_string(&dst).unwrap(), "test");
         fs::remove_file(&src).unwrap();
@@ -106,7 +177,7 @@ mod tests {
         if dst.exists() {
             fs::remove_file(&dst).unwrap();
         }
-        let result = link_files(&src, &dst, LinkType::Soft);
+        let result = link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort);
         assert!(matches!(
             result,
             Err(crate::AtomicLinkError::SourceNotFound(_))
@@ -120,7 +191,7 @@ mod tests {
         let dst = tmp_dir.join("hermitgrab_test_dst3");
         fs::write(&src, b"test").unwrap();
         fs::write(&dst, b"existing").unwrap();
-        let result = link_files(&src, &dst, LinkType::Soft);
+        let result = link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort);
         assert!(matches!(
             result,
             Err(crate::AtomicLinkError::DestinationExists(_))
@@ -145,7 +216,7 @@ mod tests {
             use std::os::windows::fs::symlink_file;
             symlink_file(&src, &dst).unwrap();
         }
-        let result = link_files(&src, &dst, LinkType::Soft);
+        let result = link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort);
         assert!(result.is_ok());
         fs::remove_file(&src).unwrap();
         fs::remove_file(&dst).unwrap();
@@ -165,7 +236,7 @@ mod tests {
             fs::remove_dir_all(&src).unwrap();
         }
         fs::create_dir(&src).unwrap();
-        link_files(&src, &dst, LinkType::Soft).unwrap();
+        link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort).unwrap();
         assert!(dst.exists());
         assert!(dst.is_symlink());
         assert!(dst.read_link().unwrap() == src);

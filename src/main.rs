@@ -20,10 +20,14 @@ pub mod links_files;
 pub mod ubi_int;
 
 pub use crate::action::{Action, InstallAction, LinkAction};
-use crate::common_cli::{hermitgrab_info, info};
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
 use crate::config::{Tag, find_hermit_files};
 pub use crate::hermitgrab_error::AtomicLinkError;
+use crate::links_files::FallbackOperation;
+use crate::{
+    common_cli::{hermitgrab_info, info},
+    config::CONF_FILE_NAME,
+};
 pub use std::collections::HashSet;
 use std::path::PathBuf;
 pub use std::sync::Arc;
@@ -88,6 +92,9 @@ enum AddCommand {
         /// Provided tags in case a new config file will be created, i.e. destination does not yet exist.
         #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 0..)]
         provided_tags: Vec<Tag>,
+        /// Fallback strategy in case the destination already exists
+        #[arg(short = 'f', long)]
+        fallback: FallbackOperation,
     },
     /// Add a new profile to the config
     Profile {
@@ -206,6 +213,21 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
     }
     let user_dirs = UserDirs::new().expect("Could not get user directories");
     let dotfiles_dir = user_dirs.home_dir().join(".hermitgrab");
+    if !dotfiles_dir.exists() {
+        let path_buf = std::env::current_exe().ok();
+        if let Some(exe) = path_buf {
+            let exe_dir = exe.parent();
+            if let Some(exe_dir) = exe_dir {
+                if exe_dir.join(CONF_FILE_NAME).exists() {
+                    hermitgrab_info!(
+                        "Using hermit directory beside executable {}",
+                        dotfiles_dir.display()
+                    );
+                    return exe_dir.to_path_buf();
+                }
+            }
+        }
+    }
     hermitgrab_info!(
         "Using hermit directory from user dirs: {}",
         dotfiles_dir.display()
@@ -274,6 +296,7 @@ async fn main() -> Result<()> {
                 ref destination,
                 ref required_tags,
                 ref provided_tags,
+                ref fallback,
             } => {
                 cmd_add::add_link(
                     target_dir,
@@ -282,6 +305,7 @@ async fn main() -> Result<()> {
                     destination,
                     required_tags,
                     provided_tags,
+                    fallback,
                 )?;
             }
             AddCommand::Profile { ref name, ref tags } => {

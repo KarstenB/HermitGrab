@@ -13,7 +13,7 @@ use crate::{
     error, hermit_dir,
     hermitgrab_error::AddError,
     info,
-    links_files::copy,
+    links_files::{FallbackOperation, copy},
     success, user_home,
 };
 
@@ -65,6 +65,7 @@ pub(crate) fn add_link(
     destination: &Option<String>,
     required_tags: &[RequireTag],
     provided_tags: &[Tag],
+    fallback: &FallbackOperation,
 ) -> Result<(), AddError> {
     let target_dir = if let Some(target_dir) = target_dir {
         let new_target = PathBuf::from(target_dir);
@@ -171,6 +172,7 @@ pub(crate) fn add_link(
         target: target.to_string_lossy().to_string(),
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
+        fallback: fallback.clone(),
     };
     if config_file.exists() {
         let table = to_table(&file_entry)?;

@@ -20,6 +20,8 @@ pub enum AtomicLinkError {
     DestinationExists(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("Failed to find a backup file name for {0}")]
+    BackupAlreadyExists(String),
 }
 
 #[derive(Debug, Error)]
