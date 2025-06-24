@@ -172,7 +172,7 @@ pub(crate) fn add_link(
         target: target.to_string_lossy().to_string(),
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
-        fallback: fallback.clone(),
+        fallback: *fallback,
     };
     if config_file.exists() {
         let table = to_table(&file_entry)?;

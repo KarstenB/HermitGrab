@@ -423,19 +423,29 @@ impl DotfileEntry {
                 FileStatus::Ok
             }
             LinkType::Hard => {
-                let Ok(dst_meta) = actual_dst.metadata() else {
-                    return FileStatus::FailedToGetMetadata(actual_dst);
-                };
-                let Ok(src_meta) = src_file.metadata() else {
-                    return FileStatus::FailedToGetMetadata(src_file);
-                };
-                use std::os::unix::fs::MetadataExt;
-                let dst_ino = dst_meta.ino();
-                let src_ino = src_meta.ino();
-                if src_ino != dst_ino {
-                    return FileStatus::InodeMismatch(actual_dst);
+                #[cfg(target_family = "unix")]
+                {
+                    let Ok(dst_meta) = actual_dst.metadata() else {
+                        return FileStatus::FailedToGetMetadata(actual_dst);
+                    };
+                    let Ok(src_meta) = src_file.metadata() else {
+                        return FileStatus::FailedToGetMetadata(src_file);
+                    };
+                    use std::os::unix::fs::MetadataExt;
+                    let dst_ino = dst_meta.ino();
+                    let src_ino = src_meta.ino();
+                    if src_ino != dst_ino {
+                        return FileStatus::InodeMismatch(actual_dst);
+                    }
+                    FileStatus::Ok
                 }
-                FileStatus::Ok
+                #[cfg(not(target_family = "unix"))]
+                {
+                    crate::common_cli::warn(
+                        "Hardlink check not supported on non unix systems, checking file similarity",
+                    );
+                    return check_copied(quick, src_file, actual_dst);
+                }
             }
             LinkType::Copy => check_copied(quick, src_file, actual_dst),
         }

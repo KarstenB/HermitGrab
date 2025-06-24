@@ -1,0 +1,157 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on new tags like v1.0.0
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: false
+  
+  build-linux-win:
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2 
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and run Dev Container task
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ghcr.io/karstenb/hermitgrab-devcontainer
+          runCmd: |
+            cargo make build-linux-win
+            cargo make pkg-linux-win
+      
+      - name: Upload Linux x86_64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/hermitgrab-linux-x86_64.tar.gz
+          asset_name: hermitgrab-linux-x86_64.tar.gz
+          asset_content_type: application/gzip
+  
+      - name: Upload Linux aarch64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/hermitgrab-linux-aarch64.tar.gz
+          asset_name: hermitgrab-linux-aarch64.tar.gz
+          asset_content_type: application/gzip
+  
+      - name: Upload Windows x86_64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/hermitgrab-windows-x86_64.zip
+          asset_name: hermitgrab-windows-x86_64.zip
+          asset_content_type: application/zip
+      
+      - name: Upload Linux x86_64 Raw Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/hermitgrab-linux-x86_64
+          asset_name: hermitgrab-linux-x86_64
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux aarch64 Raw Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: release/hermitgrab-linux-aarch64
+          asset_name: hermitgrab-linux-aarch64
+          asset_content_type: application/octet-stream
+  
+  
+  build-macos:
+    runs-on: macos-latest # Use a macOS runner for native compilation
+    needs: create-release
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        target: x86_64-apple-darwin, aarch64-apple-darwin # Build for Intel and Apple Silicon
+
+    - uses: davidB/rust-cargo-make@v1
+    - name: Build Release Binaries x86_64
+      run: cargo make build-mac-x86_64
+    - name: Build Release Binaries aarch64
+      run: cargo make build-mac-aarch64
+    - name: Package Binaries
+      run: cargo make pkg-macos
+
+    - name: Upload Intel Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: target/x86_64-apple-darwin/release/hermitgrab-macos-x86_64.zip
+        asset_name: hermitgrab-macos-x86_64.zip
+        asset_content_type: application/zip
+    
+    - name: Upload Apple Silicon Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: target/aarch64-apple-darwin/release/hermitgrab-macos-aarch64.zip
+        asset_name: hermitgrab-macos-aarch64
+        asset_content_type: application/zip
+
+    - name: Upload Intel Raw Binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: target/x86_64-apple-darwin/release/hermitgrab
+        asset_name: hermitgrab-macos-x86_64
+        asset_content_type: application/octet-stream
+    
+    - name: Upload Apple Silicon Raw Binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: target/aarch64-apple-darwin/release/hermitgrab
+        asset_name: hermitgrab-macos-aarch64
+        asset_content_type: application/octet-stream

@@ -42,4 +42,7 @@ which = "8.0.0"
 whoami = "1.6.0"
 
 [profile.release]
-lto = true
+lto = "fat"
+strip = "symbols"
+opt-level = "s"
+codegen-units = 1

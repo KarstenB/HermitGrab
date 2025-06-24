@@ -1,0 +1,67 @@
+[tasks.build-linux-x86_64]
+command = "cargo"
+args = ["build", "--target", "x86_64-unknown-linux-musl", "--release"]
+
+[tasks.build-linux-aarch64]
+command = "cargo"
+args = ["build", "--target", "aarch64-unknown-linux-musl", "--release"]
+
+[tasks.build-windows-x86_64]
+command = "cargo"
+args = ["build", "--target", "x86_64-pc-windows-gnu", "--release"]
+
+# Unfortunately we can't manage those requirements in the devcontainer.json
+# So for MacOs we install the targets here. Luckily that is all that has to be done
+[tasks.prepare-mac-x86_64]
+command = "rustup"
+args = ["target", "add", "x86_64-apple-darwin"]
+[tasks.prepare-mac-aarch64]
+command = "rustup"
+args = ["target", "add", "aarch64-apple-darwin"]
+
+[tasks.build-mac-x86_64]
+dependencies = ["prepare-mac-x86_64"]
+command = "cargo"
+args = ["build", "--target", "x86_64-apple-darwin", "--release"]
+
+[tasks.build-mac-aarch64]
+dependencies = ["prepare-mac-aarch64"]
+command = "cargo"
+args = ["build", "--target", "aarch64-apple-darwin", "--release"]
+
+[tasks.build-linux-win]
+dependencies = ["build-windows-x86_64", "build-linux-aarch64", "build-linux-x86_64"]
+
+[tasks.pkg-linux-win]
+dependencies = ["build-linux-win"]
+script = """
+#!/bin/bash
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-pc-windows-gnu/release
+zip -r hermitgrab-windows-x86_64.zip hermitgrab.exe
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release
+tar -cvzf hermitgrab-linux-aarch64.tar.gz hermitgrab
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release
+tar -cvzf hermitgrab-linux-x86_64.tar.gz hermitgrab
+if [ ! -d ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/ ]; then
+    mkdir ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release
+fi
+cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-pc-windows-gnu/release/hermitgrab-windows-x86_64.zip ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-windows-x86_64.zip
+cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64
+cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermitgrab-linux-aarch64.tar.gz ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64.tar.gz
+cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64
+cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab-linux-x86_64.tar.gz ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64.tar.gz
+
+"""
+
+[tasks.build-macos]
+dependencies = ["build-mac-x86_64", "build-mac-aarch64"]
+
+[tasks.pkg-macos]
+dependencies = ["build-macos"]
+script = """
+#!/bin/bash
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release
+zip -r hermitgrab-macos-x86_64.zip hermitgrab
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release
+zip -r hermitgrab-macos-aarch64.zip hermitgrab
+"""

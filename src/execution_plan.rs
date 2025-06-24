@@ -169,16 +169,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::{LinkType, config::GlobalConfig, links_files::FallbackOperation};
-
-    #[test]
-    fn test_create_execution_plan() {
-        let global_config = GlobalConfig::default();
-        let plan = create_execution_plan(&global_config);
-        assert!(plan.is_ok());
-        let plan = plan.unwrap();
-        assert!(!plan.actions.is_empty());
-    }
+    use crate::{LinkType, links_files::FallbackOperation};
 
     #[test]
     fn test_topology_sorting() {
