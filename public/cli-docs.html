@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HermitGrab Docs - CLI Reference</title>
+    <link rel="icon" type="image/svg+xml" href="HermitGrab.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0A0A0A;
+            color: #E2E8F0;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .glass-pane {
+            background: rgba(23, 23, 23, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .gradient-text {
+            background: linear-gradient(to right, #38bdf8, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .docs-content h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.5rem;
+            margin-top: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .docs-content h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        .docs-content p, .docs-content li {
+            color: #94a3b8;
+            line-height: 1.75;
+        }
+        .docs-content code {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.9em;
+        }
+        .docs-content .command {
+            background-color: #111827;
+             border-radius: 0.5rem;
+             border: 1px solid #334155;
+             padding: 1.25rem;
+             margin-top: 1rem;
+             margin-bottom: 1.5rem;
+        }
+        .docs-content .command-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 glass-pane">
+        <div class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <a href="index.html" class="flex items-center space-x-3">
+                <img src="HermitGrab.svg" alt="HermitGrab Logo" class="w-10 h-10">
+                <h1 class="text-2xl font-bold text-slate-100">HermitGrab</h1>
+            </a>
+            <nav class="hidden md:flex space-x-8 text-slate-300">
+                <a href="index.html#features" class="hover:text-sky-400 transition-colors">Features</a>
+                <a href="toml-docs.html" class="hover:text-sky-400 transition-colors">Docs</a>
+                <a href="cli-docs.html" class="font-bold text-white">CLI Reference</a>
+                <a href="index.html#install" class="hover:text-sky-400 transition-colors">Install</a>
+            </nav>
+            <a href="https://github.com/KarstenB/hermitgrab" target="_blank" class="hidden md:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg transition-colors">
+                <i data-lucide="github"></i>
+                <span>GitHub</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="pt-32 pb-20">
+        <div class="container mx-auto px-6 max-w-4xl docs-content">
+            <h1 class="text-5xl font-black tracking-tight gradient-text">CLI Reference</h1>
+            <p class="mt-4 text-xl text-slate-400">A detailed reference for the HermitGrab command line interface.</p>
+
+            <h2>Core Commands</h2>
+            
+            <div class="command">
+                <p class="command-name">hermitgrab apply</p>
+                <p class="mt-2">Applies configurations based on the specified profiles or tags. This is the main command you will use.</p>
+                <p class="mt-3"><code>hermitgrab apply [--profile &lt;name&gt;...] [--tags &lt;tags&gt;...]</code></p>
+                <ul>
+                    <li><code>--profile, -p</code>: Specify one or more profiles to activate.</li>
+                    <li><code>--tags, -t</code>: Specify one or more individual tags to activate.</li>
+                </ul>
+            </div>
+
+            <div class="command">
+                <p class="command-name">hermitgrab install</p>
+                <p class="mt-2">Installs a specific tool defined in any scanned `hermit.toml` file.</p>
+                <p class="mt-3"><code>hermitgrab install &lt;name&gt;</code></p>
+            </div>
+            
+            <div class="command">
+                <p class="command-name">hermitgrab check</p>
+                <p class="mt-2">Checks all configurations for errors without applying any changes.</p>
+            </div>
+
+            <h2>Profile Management</h2>
+
+            <div class="command">
+                <p class="command-name">hermitgrab profile list</p>
+                <p class="mt-2">Lists all available profiles found in your configurations.</p>
+            </div>
+
+            <div class="command">
+                <p class="command-name">hermitgrab profile update</p>
+                <p class="mt-2">Adds or removes tags from an existing profile.</p>
+                 <p class="mt-3"><code>hermitgrab profile update &lt;name&gt; [--add &lt;tags&gt;] [--remove &lt;tags&gt;]</code></p>
+            </div>
+
+             <h2>Repository and Configuration Management</h2>
+
+            <div class="command">
+                <p class="command-name">hermitgrab repo add</p>
+                <p class="mt-2">Adds a new Git repository to be managed by HermitGrab.</p>
+            </div>
+
+            <div class="command">
+                <p class="command-name">hermitgrab repo update</p>
+                <p class="mt-2">Updates all managed Git repositories by pulling the latest changes.</p>
+            </div>
+            
+            <div class="command">
+                <p class="command-name">hermitgrab new</p>
+                <p class="mt-2">Creates a new `hermit.toml` configuration file in the current directory.</p>
+            </div>
+
+        </div>
+    </main>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
