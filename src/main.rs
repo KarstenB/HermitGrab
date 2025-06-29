@@ -64,7 +64,7 @@ struct Cli {
 enum AddCommand {
     Config {
         /// Subdirectory of the hermit.toml file to add the target directory to
-        target_dir: PathBuf,
+        config_dir: PathBuf,
         /// Tags this config provides
         #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 1..)]
         tags: Vec<Tag>,
@@ -76,10 +76,10 @@ enum AddCommand {
     Link {
         /// Subdirectory of the hermit.toml file to add the link to
         #[arg(long)]
-        target_dir: Option<String>,
+        config_dir: Option<PathBuf>,
         /// Source file or directory to link
         source: PathBuf,
-        /// Link type to use, can be 'soft', 'hard' or 'copy'
+        /// Link type to use
         #[arg(short = 'l', long, default_value = "soft", value_enum)]
         link_type: LinkType,
         /// Destination path for the link, if not specified, uses the source name
@@ -93,7 +93,7 @@ enum AddCommand {
         #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 0..)]
         provided_tags: Vec<Tag>,
         /// Fallback strategy in case the destination already exists
-        #[arg(short = 'f', long)]
+        #[arg(short = 'f', long, default_value = "abort", value_enum)]
         fallback: FallbackOperation,
     },
     /// Add a new profile to the config
@@ -283,14 +283,14 @@ async fn main() -> Result<()> {
         },
         Commands::Add { add_command } => match add_command {
             AddCommand::Config {
-                ref target_dir,
+                ref config_dir,
                 ref tags,
                 ref required_tags,
             } => {
-                cmd_add::add_config(target_dir, tags, required_tags, &[], &[])?;
+                cmd_add::add_config(config_dir, tags, required_tags, &[], &[])?;
             }
             AddCommand::Link {
-                ref target_dir,
+                ref config_dir,
                 ref source,
                 ref link_type,
                 ref destination,
@@ -299,7 +299,7 @@ async fn main() -> Result<()> {
                 ref fallback,
             } => {
                 cmd_add::add_link(
-                    target_dir,
+                    config_dir,
                     source,
                     link_type,
                     destination,

@@ -18,16 +18,16 @@ use crate::{
 };
 
 pub(crate) fn add_config(
-    target_dir: &PathBuf,
+    config_dir: &PathBuf,
     provided_tags: &[Tag],
     required_tags: &[RequireTag],
     files: &[DotfileEntry],
     installs: &[InstallEntry],
 ) -> Result<(), AddError> {
-    let config_file = if target_dir.ends_with(CONF_FILE_NAME) {
-        target_dir.clone()
+    let config_file = if config_dir.ends_with(CONF_FILE_NAME) {
+        config_dir.clone()
     } else {
-        target_dir.join(CONF_FILE_NAME)
+        config_dir.join(CONF_FILE_NAME)
     };
     let mut config = HermitConfig::default();
     info!("Creating a new configuration file at {config_file:?}");
@@ -40,7 +40,7 @@ pub(crate) fn add_config(
     config.requires.extend(required_tags.to_vec());
     config.file.extend(files.to_vec());
     config.install.extend(installs.to_vec());
-    std::fs::create_dir_all(target_dir)?;
+    std::fs::create_dir_all(config_dir)?;
     config.save_to_file(&config_file)?;
     Ok(())
 }
@@ -59,7 +59,7 @@ fn prompt_for_provides() -> Result<Vec<Tag>, AddError> {
 }
 
 pub(crate) fn add_link(
-    target_dir: &Option<String>,
+    config_dir: &Option<PathBuf>,
     source: &Path,
     link_type: &LinkType,
     destination: &Option<String>,
@@ -67,7 +67,7 @@ pub(crate) fn add_link(
     provided_tags: &[Tag],
     fallback: &FallbackOperation,
 ) -> Result<(), AddError> {
-    let target_dir = if let Some(target_dir) = target_dir {
+    let target_dir = if let Some(target_dir) = config_dir {
         let new_target = PathBuf::from(target_dir);
         if new_target.is_absolute() {
             new_target
@@ -161,6 +161,11 @@ pub(crate) fn add_link(
             .unwrap_or(path)
     } else {
         source.strip_prefix(user_home())?.to_path_buf()
+    };
+    let target = if target.is_absolute() {
+        target
+    } else {
+        PathBuf::from("~").join(target)
     };
     let source_filename = source
         .file_name()

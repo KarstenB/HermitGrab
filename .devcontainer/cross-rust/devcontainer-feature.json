@@ -1,5 +1,8 @@
 {
     "id": "cross-rust",
     "version": "0.1.0",
-    "description": "Compilation tools for cross compilation"
+    "description": "Compilation tools for cross compilation",
+    "dependsOn": {
+        "ghcr.io/devcontainers/features/rust:1": {}
+    }
 }

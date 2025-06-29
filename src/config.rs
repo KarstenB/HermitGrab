@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -237,6 +238,20 @@ pub enum LinkType {
     Copy,
 }
 
+impl ValueEnum for LinkType {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[LinkType::Soft, LinkType::Hard, LinkType::Copy]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            LinkType::Soft => Some(clap::builder::PossibleValue::new("soft")),
+            LinkType::Hard => Some(clap::builder::PossibleValue::new("hard")),
+            LinkType::Copy => Some(clap::builder::PossibleValue::new("copy")),
+        }
+    }
+}
+
 impl FromStr for LinkType {
     type Err = String;
 
@@ -280,6 +295,8 @@ pub struct PatchfileEntry {
     pub target: String,
     #[serde(rename = "type")]
     pub patch_type: PatchType,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
 }
 impl PatchfileEntry {

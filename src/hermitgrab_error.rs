@@ -51,6 +51,14 @@ pub enum PatchActionError {
     SerdeJsonError(#[from] serde_json::Error),
     #[error(transparent)]
     PatchError(#[from] json_patch::PatchError),
+    #[error(transparent)]
+    YamlParseError(#[from] serde_yml::Error),
+    #[error(transparent)]
+    TomlDeserializeError(#[from] toml::de::Error),
+    #[error(transparent)]
+    TomlSerializeError(#[from] toml::ser::Error),
+    #[error(transparent)]
+    SerdecParseError(#[from] jsonc_parser::errors::ParseError),
 }
 
 #[derive(Debug, Error)]

@@ -93,11 +93,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
     for cfg in global_config.subconfigs.values() {
         for file in &cfg.file {
             let id = format!("link:{}:{}", cfg.path().display(), file.target);
-            let source = cfg
-                .path()
-                .parent()
-                .expect("File should have a directory")
-                .join(&file.source);
+            let source = cfg.directory().join(&file.source);
             actions.push(Arc::new(LinkAction::new(
                 id,
                 &global_config.root_dir,
