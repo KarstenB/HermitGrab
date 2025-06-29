@@ -7,14 +7,16 @@ use std::{
 use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 
 use crate::{
-    DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag, choice,
+    DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag,
+    action::link::copy,
+    choice,
     common_cli::{hint, prompt},
-    config::{CONF_FILE_NAME, Source::CommandLine, Tag, load_hermit_config_editable},
+    config::{
+        CONF_FILE_NAME, FallbackOperation, Source::CommandLine, Tag, load_hermit_config_editable,
+    },
     error, hermit_dir,
     hermitgrab_error::AddError,
-    info,
-    links_files::{FallbackOperation, copy},
-    success, user_home,
+    info, success, user_home,
 };
 
 pub(crate) fn add_config(
@@ -180,43 +182,48 @@ pub(crate) fn add_link(
         fallback: *fallback,
     };
     if config_file.exists() {
-        let table = to_table(&file_entry)?;
-        let mut config = load_hermit_config_editable(&config_file)?;
-        let files = config["files"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
-        match files {
-            Item::ArrayOfTables(arr) => {
-                for entry in arr.iter() {
-                    let Item::Value(Value::String(ref source)) = entry["source"] else {
-                        continue;
-                    };
-                    let Item::Value(Value::String(ref target)) = entry["target"] else {
-                        continue;
-                    };
-                    let source_str = source.value();
-                    let target_str = target.value();
-                    if source_str == &file_entry.source && target_str == &file_entry.target {
-                        error!(
-                            "The [[files]] table already contains an entry with the same source {source_str} and target {target_str}"
-                        );
-                        return Err(AddError::SourceAlreadyExists(file_entry.source.clone()));
-                    }
-                }
-                arr.push(table);
-            }
-            i => {
-                return Err(AddError::ExpectedTable(
-                    "files".to_string(),
-                    i.type_name().to_string(),
-                ));
-            }
-        }
-        let updated_config = config.to_string();
-        std::fs::write(&config_file, &updated_config)?;
+        insert_into_existing(&config_file, &file_entry)?;
     } else {
         add_config(&target_dir, provided_tags, &[], &[file_entry], &[])?;
     }
     copy(source, target_dir.join(source_filename).as_path())?;
     crate::success!("Added new link to {config_file:?}");
+    Ok(())
+}
+
+fn insert_into_existing(config_file: &PathBuf, file_entry: &DotfileEntry) -> Result<(), AddError> {
+    let table = to_table(file_entry)?;
+    let mut config = load_hermit_config_editable(config_file)?;
+    let files = config["files"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
+    match files {
+        Item::ArrayOfTables(arr) => {
+            for entry in arr.iter() {
+                let Item::Value(Value::String(ref source)) = entry["source"] else {
+                    continue;
+                };
+                let Item::Value(Value::String(ref target)) = entry["target"] else {
+                    continue;
+                };
+                let source_str = source.value();
+                let target_str = target.value();
+                if source_str == &file_entry.source && target_str == &file_entry.target {
+                    error!(
+                        "The [[files]] table already contains an entry with the same source {source_str} and target {target_str}"
+                    );
+                    return Err(AddError::SourceAlreadyExists(file_entry.source.clone()));
+                }
+            }
+            arr.push(table);
+        }
+        i => {
+            return Err(AddError::ExpectedTable(
+                "files".to_string(),
+                i.type_name().to_string(),
+            ));
+        }
+    }
+    let updated_config = config.to_string();
+    std::fs::write(config_file, &updated_config)?;
     Ok(())
 }
 

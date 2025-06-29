@@ -1,13 +1,14 @@
 use std::io::Write;
-use std::sync::Arc;
 
 use crossterm::style::{Attribute, Color, Stylize};
 
+use crate::Cli;
+use crate::action::ArcAction;
 use crate::common_cli::success;
+use crate::common_cli::{stderr, stdout};
 use crate::config::GlobalConfig;
 use crate::execution_plan::{ExecutionPlan, create_execution_plan};
 use crate::hermitgrab_error::{ActionError, ApplyError};
-use crate::{Action, Cli};
 use crate::{error, hermitgrab_info};
 
 #[allow(unused_imports)]
@@ -88,15 +89,18 @@ fn summarize(
     }
 }
 
-fn print_action_output(action: &Arc<dyn Action>) {
+fn print_action_output(action: &ArcAction) {
     if let Some(output) = action.get_output() {
-        let stdout = output.standard_output().trim();
-        let stderr = output.error_output().trim();
-        if !stdout.is_empty() {
-            crate::common_cli::stdout(stdout);
+        if output.is_empty() {
+            return;
         }
-        if !stderr.is_empty() {
-            crate::common_cli::stderr(stderr);
+        for (id, std_out, std_err) in output {
+            if let Some(std_out) = std_out {
+                stdout(&id, std_out.trim());
+            }
+            if let Some(std_err) = std_err {
+                stderr(&id, std_err.trim());
+            }
         }
     }
 }

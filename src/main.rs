@@ -15,15 +15,11 @@ pub mod config;
 pub mod detector;
 pub mod execution_plan;
 pub mod hermitgrab_error;
-pub mod links_files;
-#[cfg(feature = "ubi")]
-pub mod ubi_int;
+pub mod integrations;
 
-pub use crate::action::{Action, InstallAction, LinkAction};
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
-use crate::config::{Tag, find_hermit_files};
+use crate::config::{FallbackOperation, Tag, find_hermit_files};
 pub use crate::hermitgrab_error::AtomicLinkError;
-use crate::links_files::FallbackOperation;
 use crate::{
     common_cli::{hermitgrab_info, info},
     config::CONF_FILE_NAME,
@@ -358,7 +354,7 @@ async fn main() -> Result<()> {
         Commands::Ubi { mut ubi_args } => {
             ubi_args.insert(0, "hermitgrab ubi --".to_string());
             hermitgrab_info!("Running UBI with args: {:?}", ubi_args);
-            ubi_int::main(&ubi_args).await
+            integrations::ubi_int::main(&ubi_args).await
         }
     }
     Ok(())

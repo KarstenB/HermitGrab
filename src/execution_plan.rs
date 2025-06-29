@@ -5,14 +5,11 @@ use std::{
 };
 
 use crate::{
-    Action, InstallAction, LinkAction, RequireTag,
-    action::PatchAction,
+    RequireTag,
+    action::{ArcAction, install::InstallAction, link::LinkAction, patch::PatchAction},
     config::{GlobalConfig, Tag},
     hermitgrab_error::{ActionError, ApplyError},
 };
-
-pub type ArcAction = Arc<dyn Action + 'static>;
-
 pub struct ExecutionPlan {
     pub actions: Vec<ArcAction>,
 }
@@ -89,7 +86,7 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
 }
 
 pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPlan, ApplyError> {
-    let mut actions: Vec<Arc<dyn crate::Action>> = Vec::new();
+    let mut actions: Vec<ArcAction> = Vec::new();
     for cfg in global_config.subconfigs.values() {
         for file in &cfg.file {
             let id = format!("link:{}:{}", cfg.path().display(), file.target);
@@ -165,11 +162,11 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::{LinkType, links_files::FallbackOperation};
+    use crate::{LinkType, config::FallbackOperation};
 
     #[test]
     fn test_topology_sorting() {
-        let link_action_a = Arc::new(crate::LinkAction::new(
+        let link_action_a = Arc::new(LinkAction::new(
             "link:action_a".to_string(),
             &PathBuf::from("/tmp/hermitgrab"),
             PathBuf::from("/source/a"),
@@ -179,7 +176,7 @@ mod tests {
             LinkType::Soft,
             FallbackOperation::Abort,
         ));
-        let link_action_b = Arc::new(crate::LinkAction::new(
+        let link_action_b = Arc::new(LinkAction::new(
             "link:action_b".to_string(),
             &PathBuf::from("/tmp/hermitgrab"),
             "/source/b".into(),
@@ -189,7 +186,7 @@ mod tests {
             LinkType::Soft,
             FallbackOperation::Abort,
         ));
-        let install_action = Arc::new(crate::InstallAction::new(
+        let install_action = Arc::new(InstallAction::new(
             "install:action".to_string(),
             "install_action".to_string(),
             BTreeSet::from_iter(vec![RequireTag::Positive("tag_b".to_string())]),

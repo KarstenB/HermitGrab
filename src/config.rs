@@ -1,7 +1,9 @@
 use clap::ValueEnum;
+use clap::builder::PossibleValue;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -9,11 +11,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::DocumentMut;
 
-use crate::action::expand_directory;
 use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
-use crate::links_files::FallbackOperation;
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
@@ -52,7 +52,7 @@ impl Tag {
         &self.1
     }
 
-    pub(crate) fn is_detected(&self) -> bool {
+    pub fn is_detected(&self) -> bool {
         matches!(self.1, Source::Detector(_) | Source::BuiltInDetector)
     }
 }
@@ -332,6 +332,38 @@ fn is_default_fallback(fallback: &FallbackOperation) -> bool {
 
 fn is_default_link(link_type: &LinkType) -> bool {
     matches!(link_type, LinkType::Soft)
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum FallbackOperation {
+    #[default]
+    Abort,
+    Backup,
+    Delete,
+    DeleteDir,
+    BackupOverwrite,
+}
+
+impl ValueEnum for FallbackOperation {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            Self::Abort,
+            Self::Backup,
+            Self::BackupOverwrite,
+            Self::Delete,
+            Self::DeleteDir,
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            FallbackOperation::Abort => Some(PossibleValue::new("abort")),
+            FallbackOperation::Backup => Some(PossibleValue::new("backup")),
+            FallbackOperation::Delete => Some(PossibleValue::new("delete")),
+            FallbackOperation::DeleteDir => Some(PossibleValue::new("deletedir")),
+            FallbackOperation::BackupOverwrite => Some(PossibleValue::new("backupoverwrite")),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -719,4 +751,33 @@ pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
         }
     }
     result
+}
+
+pub fn expand_directory(dir: &str) -> PathBuf {
+    let handlebars = handlebars::Handlebars::new();
+    let dir = handlebars
+        .render_template(dir, &HashMap::<String, String>::new())
+        .unwrap_or_else(|_| dir.to_string());
+
+    if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
+        dir.replace(
+            "~/.config",
+            &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
+        )
+        .into()
+    } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
+        dir.replace(
+            "~/.local/share",
+            &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
+        )
+        .into()
+    } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
+        dir.replace(
+            "~/.local/state",
+            &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
+        )
+        .into()
+    } else {
+        shellexpand::tilde(&dir).into_owned().into()
+    }
 }

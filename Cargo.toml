@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["ubi", "interactive"]
+default = ["integrations"]
+integrations = ["ubi"]
 ubi = ["dep:ubi"]
+experimental = ["interactive"]
 interactive = [ "dep:ratatui" ]
 
 [dependencies]

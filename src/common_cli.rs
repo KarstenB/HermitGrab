@@ -29,22 +29,48 @@ pub fn hint(msg: &str) {
     println!("{} {}", "      [hint]".bold().dark_grey(), msg.dark_grey());
 }
 
-pub fn stdout(msg: &str) {
+pub fn stdout(tag: &str, msg: &str) {
     let lines = msg.lines().collect::<Vec<_>>();
     if lines.is_empty() {
         return;
     }
     for line in lines {
-        println!("{} {}", "    [stdout]".bold().dark_grey(), line.dark_grey());
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if !tag.is_empty() {
+            println!(
+                "{}[{}] {}",
+                "    [stdout]".bold().dark_grey(),
+                tag.dark_grey(),
+                line.dark_grey()
+            );
+        } else {
+            println!("{} {}", "    [stdout]".bold().dark_grey(), line.dark_grey());
+        }
     }
 }
-pub fn stderr(msg: &str) {
+pub fn stderr(tag: &str, msg: &str) {
     let lines = msg.lines().collect::<Vec<_>>();
     if lines.is_empty() {
         return;
     }
     for line in lines {
-        println!("{} {}", "    [stderr]".bold().dark_red(), line.dark_red());
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if !tag.is_empty() {
+            println!(
+                "{}[{}] {}",
+                "    [stderr]".bold().dark_red(),
+                tag.dark_red(),
+                line.dark_red()
+            );
+        } else {
+            println!("{} {}", "    [stderr]".bold().dark_red(), line.dark_red());
+        }
     }
 }
 
@@ -100,14 +126,14 @@ macro_rules! hermitgrab_info {
 }
 #[macro_export]
 macro_rules! stdout {
-    ($($arg:tt)*) => {
-        $crate::common_cli::stdout(&format!($($arg)*));
+    ($tag:tt, $($arg:tt)*) => {
+        $crate::common_cli::stdout($tag, &format!($($arg)*));
     };
 }
 #[macro_export]
 macro_rules! stderr {
-    ($($arg:tt)*) => {
-        $crate::common_cli::stderr(&format!($($arg)*));
+    ($tag:tt, $($arg:tt)*) => {
+        $crate::common_cli::stderr($tag, &format!($($arg)*));
     };
 }
 #[macro_export]

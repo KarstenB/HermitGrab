@@ -1,42 +1,97 @@
-use clap::ValueEnum;
-use clap::builder::PossibleValue;
-use serde::{Deserialize, Serialize};
+use std::{collections::BTreeSet, path::PathBuf};
+
+use crate::{
+    LinkType, RequireTag,
+    action::Action,
+    config::{FallbackOperation, Tag, expand_directory},
+    hermitgrab_error::{ActionError, LinkActionError},
+};
 
 use crate::hermitgrab_error::AtomicLinkError;
-use crate::{LinkType, info};
+use crate::info;
 use std::ffi::OsString;
 use std::fs::{self, hard_link};
 use std::path::Path;
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
-pub enum FallbackOperation {
-    #[default]
-    Abort,
-    Backup,
-    Delete,
-    DeleteDir,
-    BackupOverwrite,
+pub struct LinkAction {
+    id: String,
+    rel_src: String,
+    rel_dst: String,
+    src: PathBuf,
+    dst: String,
+    link_type: LinkType,
+    requires: Vec<RequireTag>,
+    provides: Vec<Tag>,
+    fallback: FallbackOperation,
+}
+impl LinkAction {
+    pub(crate) fn new(
+        id: String,
+        config_dir: &PathBuf,
+        src: PathBuf,
+        dst: String,
+        requires: BTreeSet<RequireTag>,
+        provides: BTreeSet<Tag>,
+        link_type: LinkType,
+        fallback: FallbackOperation,
+    ) -> Self {
+        let rel_src = src
+            .strip_prefix(config_dir)
+            .unwrap_or(&src)
+            .to_string_lossy()
+            .to_string();
+        let rel_dst = expand_directory(&dst);
+        let rel_dst = rel_dst
+            .strip_prefix(shellexpand::tilde("~/").as_ref())
+            .unwrap_or(&rel_dst)
+            .to_string_lossy()
+            .to_string();
+
+        Self {
+            id,
+            src,
+            rel_src,
+            dst,
+            rel_dst,
+            link_type,
+            requires: requires.into_iter().collect(),
+            provides: provides.into_iter().collect(),
+            fallback,
+        }
+    }
 }
 
-impl ValueEnum for FallbackOperation {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[
-            Self::Abort,
-            Self::Backup,
-            Self::BackupOverwrite,
-            Self::Delete,
-            Self::DeleteDir,
-        ]
+impl Action for LinkAction {
+    fn short_description(&self) -> String {
+        let link_type_str = match self.link_type {
+            LinkType::Soft => "Symlink",
+            LinkType::Hard => "Hardlink",
+            LinkType::Copy => "Copy",
+        };
+        format!("{link_type_str} {} -> {}", self.rel_src, self.rel_dst)
     }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        match self {
-            FallbackOperation::Abort => Some(PossibleValue::new("abort")),
-            FallbackOperation::Backup => Some(PossibleValue::new("backup")),
-            FallbackOperation::Delete => Some(PossibleValue::new("delete")),
-            FallbackOperation::DeleteDir => Some(PossibleValue::new("deletedir")),
-            FallbackOperation::BackupOverwrite => Some(PossibleValue::new("backupoverwrite")),
-        }
+    fn long_description(&self) -> String {
+        format!(
+            "Symlink from {} to {} (tags: {:?})",
+            self.src.display(),
+            self.dst,
+            self.requires
+        )
+    }
+    fn requires(&self) -> &[RequireTag] {
+        &self.requires
+    }
+    fn provides(&self) -> &[Tag] {
+        &self.provides
+    }
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+    fn execute(&self) -> Result<(), ActionError> {
+        let dst_str = expand_directory(&self.dst);
+        link_files(&self.src, dst_str, &self.link_type, &self.fallback)
+            .map_err(LinkActionError::AtomicLinkError)?;
+        Ok(())
     }
 }
 
