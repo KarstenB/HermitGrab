@@ -1,0 +1,13 @@
+{% extends "docs/base.html" %}
+
+{% block content %}
+<main class="pt-24">
+  <!-- Hero Section -->
+  <section class="relative text-center py-20 md:py-32 overflow-hidden">
+    <h1 class="text-5xl font-black tracking-tight gradient-text mb-6">
+      {% if page.title %}{{ page.title }}{% elif section.title %}{{ section.title }}{% endif %}
+    </h1>
+    {% if page.content %}{{ page.content | safe }}{% elif section.content %}{{ section.content | safe }}{% endif %}
+  </section>
+</main>
+{% endblock content %}

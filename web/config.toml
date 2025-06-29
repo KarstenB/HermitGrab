@@ -1,0 +1,14 @@
+base_url = "/"
+title = "HermitGrab"
+description = "Modern Dotfile Management with Rust."
+compile_sass = false
+minify_html = true
+default_language = "en"
+
+[markdown]
+# Enable syntax highlighting for code blocks
+highlight_code = true
+highlight_theme = "base16-ocean-dark"
+
+[extra]
+# Add any custom variables here
