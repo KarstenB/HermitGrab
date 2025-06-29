@@ -1,10 +1,11 @@
 use std::{collections::BTreeSet, path::PathBuf};
 
 use crate::{
-    LinkType, RequireTag,
+    HermitConfig, LinkType, RequireTag,
     action::Action,
-    config::{FallbackOperation, Tag, expand_directory},
+    config::{FallbackOperation, Tag},
     hermitgrab_error::{ActionError, LinkActionError},
+    user_home,
 };
 
 use crate::hermitgrab_error::AtomicLinkError;
@@ -18,7 +19,7 @@ pub struct LinkAction {
     rel_src: String,
     rel_dst: String,
     src: PathBuf,
-    dst: String,
+    dst: PathBuf,
     link_type: LinkType,
     requires: Vec<RequireTag>,
     provides: Vec<Tag>,
@@ -27,23 +28,24 @@ pub struct LinkAction {
 impl LinkAction {
     pub(crate) fn new(
         id: String,
-        config_dir: &PathBuf,
+        config_dir: &Path,
         src: PathBuf,
-        dst: String,
+        dst: PathBuf,
         requires: BTreeSet<RequireTag>,
         provides: BTreeSet<Tag>,
         link_type: LinkType,
         fallback: FallbackOperation,
+        cfg: &HermitConfig,
     ) -> Self {
         let rel_src = src
             .strip_prefix(config_dir)
             .unwrap_or(&src)
             .to_string_lossy()
             .to_string();
-        let rel_dst = expand_directory(&dst);
-        let rel_dst = rel_dst
-            .strip_prefix(shellexpand::tilde("~/").as_ref())
-            .unwrap_or(&rel_dst)
+        let dst = cfg.global_config().expand_directory(&dst);
+        let rel_dst = dst
+            .strip_prefix(user_home())
+            .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
 
@@ -74,7 +76,7 @@ impl Action for LinkAction {
         format!(
             "Symlink from {} to {} (tags: {:?})",
             self.src.display(),
-            self.dst,
+            self.dst.display(),
             self.requires
         )
     }
@@ -88,8 +90,7 @@ impl Action for LinkAction {
         self.id.clone()
     }
     fn execute(&self) -> Result<(), ActionError> {
-        let dst_str = expand_directory(&self.dst);
-        link_files(&self.src, dst_str, &self.link_type, &self.fallback)
+        link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
             .map_err(LinkActionError::AtomicLinkError)?;
         Ok(())
     }

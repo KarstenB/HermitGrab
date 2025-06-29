@@ -85,11 +85,13 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
     }
 }
 
-pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPlan, ApplyError> {
+pub fn create_execution_plan(
+    global_config: &Arc<GlobalConfig>,
+) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<ArcAction> = Vec::new();
     for cfg in global_config.subconfigs.values() {
         for file in &cfg.file {
-            let id = format!("link:{}:{}", cfg.path().display(), file.target);
+            let id = format!("link:{}:{}", cfg.path().display(), file.target.display());
             let source = cfg.directory().join(&file.source);
             actions.push(Arc::new(LinkAction::new(
                 id,
@@ -100,10 +102,11 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 cfg.provides.clone(),
                 file.link,
                 file.fallback,
+                cfg,
             )));
         }
         for patch in &cfg.patch {
-            let id = format!("link:{}:{}", cfg.path().display(), patch.target);
+            let id = format!("link:{}:{}", cfg.path().display(), patch.target.display());
             let source = cfg
                 .path()
                 .parent()
@@ -117,6 +120,7 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 patch.get_requires(cfg),
                 cfg.provides.clone(),
                 patch.patch_type.clone(),
+                cfg,
             )));
         }
         for inst in &cfg.install {
@@ -151,7 +155,8 @@ pub fn create_execution_plan(global_config: &GlobalConfig) -> Result<ExecutionPl
                 install_cmd.clone(),
                 inst.version.clone(),
                 variables,
-            )));
+                cfg,
+            )?));
         }
     }
     Ok(ExecutionPlan { actions })
@@ -162,42 +167,50 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::{LinkType, config::FallbackOperation};
+    use crate::{HermitConfig, LinkType, config::FallbackOperation};
 
     #[test]
     fn test_topology_sorting() {
+        let default_config = Arc::new(GlobalConfig::default());
+        let cfg = HermitConfig::create_new(&PathBuf::from("/tmp/hermitgrab"), default_config);
         let link_action_a = Arc::new(LinkAction::new(
             "link:action_a".to_string(),
             &PathBuf::from("/tmp/hermitgrab"),
             PathBuf::from("/source/a"),
-            "target_a".to_string(),
+            PathBuf::from("target_a"),
             BTreeSet::new(),
             BTreeSet::from_iter(vec![Tag::from_str("tag_a").unwrap()]),
             LinkType::Soft,
             FallbackOperation::Abort,
+            &cfg,
         ));
         let link_action_b = Arc::new(LinkAction::new(
             "link:action_b".to_string(),
             &PathBuf::from("/tmp/hermitgrab"),
             "/source/b".into(),
-            "target_b".to_string(),
+            "target_b".into(),
             BTreeSet::from_iter(vec![RequireTag::Positive("tag_a".to_string())]),
             BTreeSet::from_iter(vec![Tag::from_str("tag_b").unwrap()]),
             LinkType::Soft,
             FallbackOperation::Abort,
+            &cfg,
         ));
-        let install_action = Arc::new(InstallAction::new(
-            "install:action".to_string(),
-            "install_action".to_string(),
-            BTreeSet::from_iter(vec![RequireTag::Positive("tag_b".to_string())]),
-            BTreeSet::from_iter(vec![Tag::from_str("tag_install").unwrap()]),
-            None,
-            None,
-            None,
-            "install_cmd".to_string(),
-            None,
-            std::collections::BTreeMap::new(),
-        ));
+        let install_action = Arc::new(
+            InstallAction::new(
+                "install:action".to_string(),
+                "install_action".to_string(),
+                BTreeSet::from_iter(vec![RequireTag::Positive("tag_b".to_string())]),
+                BTreeSet::from_iter(vec![Tag::from_str("tag_install").unwrap()]),
+                None,
+                None,
+                None,
+                "install_cmd".to_string(),
+                None,
+                std::collections::BTreeMap::new(),
+                &cfg,
+            )
+            .unwrap(),
+        );
         let actions: Vec<ArcAction> = vec![install_action, link_action_a, link_action_b];
         let plan = ExecutionPlan { actions };
         assert_eq!(plan.actions.len(), 3);

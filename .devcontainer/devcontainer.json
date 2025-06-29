@@ -19,5 +19,12 @@
 		},
 		"./cross-rust": {}
 	},
-	"postCreateCommand": "sudo chown -R $(id -u):$(id -g) ${containerWorkspaceFolder}/target"
+	"postCreateCommand": "sudo chown -R $(id -u):$(id -g) ${containerWorkspaceFolder}/target",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode.live-server"
+			]
+		}
+	}
 }

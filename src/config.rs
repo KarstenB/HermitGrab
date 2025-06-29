@@ -1,5 +1,6 @@
 use clap::ValueEnum;
 use clap::builder::PossibleValue;
+use handlebars::Handlebars;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -9,6 +10,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 use toml_edit::DocumentMut;
 
 use crate::detector::detect_builtin_tags;
@@ -181,6 +183,8 @@ impl<'de> Deserialize<'de> for RequireTag {
 pub struct HermitConfig {
     #[serde(skip)]
     path: PathBuf,
+    #[serde(skip)]
+    global_cfg: Arc<GlobalConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub provides: BTreeSet<Tag>,
@@ -205,15 +209,20 @@ pub struct HermitConfig {
 }
 
 impl HermitConfig {
-    pub fn create_new(path: &Path) -> Self {
+    pub fn create_new(path: &Path, global_cfg: Arc<GlobalConfig>) -> Self {
         HermitConfig {
             path: path.to_path_buf(),
+            global_cfg,
             ..Default::default()
         }
     }
 
     pub fn path(&self) -> &Path {
         self.path.as_path()
+    }
+
+    pub fn global_config(&self) -> &Arc<GlobalConfig> {
+        &self.global_cfg
     }
 
     pub(crate) fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigLoadError> {
@@ -291,8 +300,8 @@ impl Display for PatchType {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PatchfileEntry {
-    pub source: String,
-    pub target: String,
+    pub source: PathBuf,
+    pub target: PathBuf,
     #[serde(rename = "type")]
     pub patch_type: PatchType,
     #[serde(default)]
@@ -314,8 +323,8 @@ impl PatchfileEntry {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct DotfileEntry {
-    pub source: String,
-    pub target: String,
+    pub source: PathBuf,
+    pub target: PathBuf,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default_link")]
     pub link: LinkType,
@@ -339,9 +348,9 @@ pub enum FallbackOperation {
     #[default]
     Abort,
     Backup,
+    BackupOverwrite,
     Delete,
     DeleteDir,
-    BackupOverwrite,
 }
 
 impl ValueEnum for FallbackOperation {
@@ -359,9 +368,9 @@ impl ValueEnum for FallbackOperation {
         match self {
             FallbackOperation::Abort => Some(PossibleValue::new("abort")),
             FallbackOperation::Backup => Some(PossibleValue::new("backup")),
+            FallbackOperation::BackupOverwrite => Some(PossibleValue::new("backupoverwrite")),
             FallbackOperation::Delete => Some(PossibleValue::new("delete")),
             FallbackOperation::DeleteDir => Some(PossibleValue::new("deletedir")),
-            FallbackOperation::BackupOverwrite => Some(PossibleValue::new("backupoverwrite")),
         }
     }
 }
@@ -445,10 +454,11 @@ impl DotfileEntry {
         requires
     }
 
-    pub(crate) fn check(&self, cfg_dir: &Path, quick: bool) -> FileStatus {
+    pub(crate) fn check(&self, cfg: &HermitConfig, quick: bool) -> FileStatus {
+        let cfg_dir = cfg.directory();
         let src_file = cfg_dir.join(&self.source);
         let src_file = src_file.canonicalize().unwrap_or(src_file);
-        let actual_dst = PathBuf::from(expand_directory(&self.target));
+        let actual_dst = cfg.global_cfg.expand_directory(&self.target);
         match actual_dst.try_exists() {
             Ok(exists) => {
                 if !exists {
@@ -713,6 +723,51 @@ impl GlobalConfig {
         self.subconfigs
             .get(&root_path.to_string_lossy().to_string())
     }
+
+    pub fn prepare_cmd(
+        &self,
+        cmd: &str,
+        additional_variables: &BTreeMap<String, String>,
+    ) -> Result<String, ConfigLoadError> {
+        let reg = Handlebars::new();
+        let data = additional_variables.clone();
+        let template = shellexpand::tilde(cmd).to_string();
+        let cmd = reg
+            .render_template(&template, &data)
+            .map_err(ConfigLoadError::RenderError)?;
+        Ok(cmd)
+    }
+
+    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
+        let handlebars = handlebars::Handlebars::new();
+        let dir: PathBuf = dir.into();
+        let dir_str = dir.to_string_lossy().to_string();
+        let dir = handlebars
+            .render_template(&dir_str, &HashMap::<String, String>::new())
+            .unwrap_or_else(|_| dir_str.to_string());
+
+        if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
+            dir.replace(
+                "~/.config",
+                &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
+            )
+            .into()
+        } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
+            dir.replace(
+                "~/.local/share",
+                &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
+            )
+            .into()
+        } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
+            dir.replace(
+                "~/.local/state",
+                &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
+            )
+            .into()
+        } else {
+            shellexpand::tilde(&dir).into_owned().into()
+        }
+    }
 }
 
 pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, ConfigLoadError> {
@@ -751,33 +806,4 @@ pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
         }
     }
     result
-}
-
-pub fn expand_directory(dir: &str) -> PathBuf {
-    let handlebars = handlebars::Handlebars::new();
-    let dir = handlebars
-        .render_template(dir, &HashMap::<String, String>::new())
-        .unwrap_or_else(|_| dir.to_string());
-
-    if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
-        dir.replace(
-            "~/.config",
-            &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
-        )
-        .into()
-    } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
-        dir.replace(
-            "~/.local/share",
-            &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
-        )
-        .into()
-    } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
-        dir.replace(
-            "~/.local/state",
-            &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
-        )
-        .into()
-    } else {
-        shellexpand::tilde(&dir).into_owned().into()
-    }
 }

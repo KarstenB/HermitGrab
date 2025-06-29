@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::sync::Arc;
 
 use crossterm::style::{Attribute, Color, Stylize};
 
@@ -15,7 +16,7 @@ use crate::{error, hermitgrab_info};
 use crate::common_cli::step;
 
 pub(crate) fn apply_with_tags(
-    global_config: &GlobalConfig,
+    global_config: &Arc<GlobalConfig>,
     cli: &Cli,
     tags: &[String],
     profile: &Option<String>,

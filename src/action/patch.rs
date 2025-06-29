@@ -1,12 +1,16 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 use jsonc_parser::ParseOptions;
 
 use crate::{
-    RequireTag,
+    HermitConfig, RequireTag,
     action::{Action, ActionOutput},
-    config::{PatchType, Tag, expand_directory},
+    config::{PatchType, Tag},
     hermitgrab_error::{ActionError, PatchActionError},
+    user_home,
 };
 
 pub struct PatchAction {
@@ -14,7 +18,7 @@ pub struct PatchAction {
     rel_src: String,
     rel_dst: String,
     src: PathBuf,
-    dst: String,
+    dst: PathBuf,
     patch_type: PatchType,
     requires: Vec<RequireTag>,
     provides: Vec<Tag>,
@@ -23,22 +27,23 @@ pub struct PatchAction {
 impl PatchAction {
     pub(crate) fn new(
         id: String,
-        config_dir: &PathBuf,
+        config_dir: &Path,
         src: PathBuf,
-        dst: String,
+        dst: PathBuf,
         requires: BTreeSet<RequireTag>,
         provides: BTreeSet<Tag>,
         patch_type: PatchType,
+        cfg: &HermitConfig,
     ) -> Self {
         let rel_src = src
             .strip_prefix(config_dir)
             .unwrap_or(&src)
             .to_string_lossy()
             .to_string();
-        let rel_dst = expand_directory(&dst);
-        let rel_dst = rel_dst
-            .strip_prefix(shellexpand::tilde("~/").as_ref())
-            .unwrap_or(&rel_dst)
+        let dst = cfg.global_config().expand_directory(&dst);
+        let rel_dst = dst
+            .strip_prefix(user_home())
+            .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
 
@@ -61,7 +66,12 @@ impl Action for PatchAction {
     }
 
     fn long_description(&self) -> String {
-        format!("{} {} with {:?}", self.patch_type, self.dst, self.src)
+        format!(
+            "{} {} with {}",
+            self.patch_type,
+            self.dst.display(),
+            self.src.display()
+        )
     }
 
     fn requires(&self) -> &[RequireTag] {
@@ -77,31 +87,29 @@ impl Action for PatchAction {
     fn execute(&self) -> Result<(), ActionError> {
         match self.patch_type {
             PatchType::JsonMerge => {
-                let dst = expand_directory(&self.dst);
-                merge_json(&self.src, PathBuf::from(dst))?;
+                merge_json(&self.src, &self.dst)?;
                 Ok(())
             }
             PatchType::JsonPatch => {
-                let dst = expand_directory(&self.dst);
-                patch_json(&self.src, &PathBuf::from(dst))?;
+                patch_json(&self.src, &self.dst)?;
                 Ok(())
             }
         }
     }
 }
 
-pub fn merge_json(src: &PathBuf, dst: PathBuf) -> Result<ActionOutput, PatchActionError> {
-    let (merge_content, _) = content_and_extension(&src)?;
-    let (mut dst_content, lower_case_ext) = content_and_extension(&dst)?;
+pub fn merge_json(src: &Path, dst: &Path) -> Result<ActionOutput, PatchActionError> {
+    let (merge_content, _) = content_and_extension(src)?;
+    let (mut dst_content, lower_case_ext) = content_and_extension(dst)?;
     json_patch::merge(&mut dst_content, &merge_content);
     let updated_dst = to_content(dst_content, &lower_case_ext)?;
-    write_contents(&dst, updated_dst)?;
+    write_contents(dst, updated_dst)?;
     Ok(ActionOutput::new_stdout(format!(
         "Merged the contents of {src:?} into {dst:?}"
     )))
 }
 
-fn write_contents(dst: &PathBuf, updated_dst: String) -> Result<(), PatchActionError> {
+fn write_contents(dst: &Path, updated_dst: String) -> Result<(), PatchActionError> {
     let dst_dir = dst.parent().expect("Failed to get parent directory");
     if !dst_dir.exists() {
         std::fs::create_dir_all(dst_dir)?;
@@ -110,8 +118,8 @@ fn write_contents(dst: &PathBuf, updated_dst: String) -> Result<(), PatchActionE
     Ok(())
 }
 
-pub fn patch_json(src: &PathBuf, dst: &PathBuf) -> Result<ActionOutput, PatchActionError> {
-    let (merge_content, _) = content_and_extension(&src)?;
+pub fn patch_json(src: &Path, dst: &Path) -> Result<ActionOutput, PatchActionError> {
+    let (merge_content, _) = content_and_extension(src)?;
     let patch: json_patch::Patch = serde_json::from_value(merge_content)?;
     let (mut dst_json, lower_case_ext) = content_and_extension(dst)?;
     json_patch::patch(&mut dst_json, &patch)?;
@@ -123,7 +131,7 @@ pub fn patch_json(src: &PathBuf, dst: &PathBuf) -> Result<ActionOutput, PatchAct
 }
 
 fn content_and_extension(
-    dst: &PathBuf,
+    dst: &Path,
 ) -> Result<(serde_json::Value, Option<String>), PatchActionError> {
     let dst_content = if dst.exists() {
         std::fs::read_to_string(dst).map_err(PatchActionError::IoError)?
@@ -144,15 +152,15 @@ fn to_content(
     match extension.as_deref() {
         Some("yaml") | Some("yml") => {
             let yaml = serde_yml::to_string(&dst_json)?;
-            return Ok(yaml);
+            Ok(yaml)
         }
         Some("toml") => {
             let toml = toml::to_string_pretty(&dst_json)?;
-            return Ok(toml);
+            Ok(toml)
         }
         _ => {
             let json = serde_json::to_string_pretty(&dst_json)?;
-            return Ok(json);
+            Ok(json)
         }
     }
 }
@@ -164,18 +172,18 @@ fn parse_file(
     match extension.as_deref() {
         Some("yaml") | Some("yml") => {
             let yaml: serde_yml::Value = serde_yml::from_str(&dst_content)?;
-            return Ok(serde_json::to_value(yaml)?);
+            Ok(serde_json::to_value(yaml)?)
         }
         Some("toml") => {
             let toml: toml::Value = toml::from_str(&dst_content)?;
-            return Ok(serde_json::to_value(toml)?);
+            Ok(serde_json::to_value(toml)?)
         }
         _ => {
             let value = jsonc_parser::parse_to_serde_value(&dst_content, &ParseOptions::default())?;
             if let Some(value) = value {
                 return Ok(value);
             }
-            return Ok(serde_json::from_str(&dst_content)?);
+            Ok(serde_json::from_str(&dst_content)?)
         }
     }
 }

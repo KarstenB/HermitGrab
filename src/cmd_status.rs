@@ -4,11 +4,11 @@ pub(crate) fn get_status(cfg: &GlobalConfig) -> Result<(), StatusError> {
     for (dir, cfg) in &cfg.subconfigs {
         info!("Checking {dir}");
         for file in &cfg.file {
-            let fs = file.check(cfg.directory(), true);
+            let fs = file.check(cfg, true);
             if fs.is_ok() {
-                success!("Link {} is ok", file.source);
+                success!("Link {} is ok", file.source.display());
             } else {
-                error!("Link {} reports a problem: {fs}", file.source);
+                error!("Link {} reports a problem: {fs}", file.source.display());
             }
         }
     }

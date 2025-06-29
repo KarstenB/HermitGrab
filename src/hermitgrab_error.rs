@@ -38,6 +38,8 @@ pub enum ConfigLoadError {
     DuplicateProfile(String, PathBuf),
     #[error("Failed to deserialize document in TOML format: {0} in file {1}")]
     DeserializeDocumentTomlError(toml_edit::TomlError, PathBuf),
+    #[error(transparent)]
+    RenderError(#[from] handlebars::RenderError),
 }
 
 #[derive(Debug, Error)]
@@ -94,7 +96,7 @@ pub enum AddError {
     #[error("Failed to strip prefix")]
     StripPrefixError(#[from] StripPrefixError),
     #[error("A source with the file {0} already exists")]
-    SourceAlreadyExists(String),
+    SourceAlreadyExists(PathBuf),
 }
 
 #[derive(Debug, Error)]
@@ -109,6 +111,8 @@ pub enum ApplyError {
     IoError(#[from] std::io::Error),
     #[error("Failed to find tag: {0}")]
     TagNotFound(String),
+    #[error(transparent)]
+    ConfigLoadError(#[from] ConfigLoadError),
 }
 
 #[derive(Debug, Error)]

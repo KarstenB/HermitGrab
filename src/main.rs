@@ -18,7 +18,7 @@ pub mod hermitgrab_error;
 pub mod integrations;
 
 pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
-use crate::config::{FallbackOperation, Tag, find_hermit_files};
+use crate::config::{FallbackOperation, GlobalConfig, Tag, find_hermit_files};
 pub use crate::hermitgrab_error::AtomicLinkError;
 use crate::{
     common_cli::{hermitgrab_info, info},
@@ -243,7 +243,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let search_root = SEARCH_ROOT.get_or_init(|| init_hermit_dir(&cli.hermit_dir));
     let yaml_files = find_hermit_files(search_root);
-    let global_config = config::GlobalConfig::from_paths(search_root, &yaml_files)?;
+    let global_config = Arc::new(GlobalConfig::from_paths(search_root, &yaml_files)?);
     match cli.command {
         Commands::Init { init_command } => match init_command {
             InitCommand::Clone { repo } => {

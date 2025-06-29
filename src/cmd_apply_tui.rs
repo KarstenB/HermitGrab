@@ -19,6 +19,7 @@ use ratatui::widgets::BorderType;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use std::collections::BTreeSet;
 use std::io;
+use std::sync::Arc;
 use unicode_width::UnicodeWidthChar;
 
 // Solarized Dark palette
@@ -44,7 +45,7 @@ impl App {
     fn update_tags_for_profile(
         &mut self,
         idx: usize,
-        global_config: &GlobalConfig,
+        global_config: &Arc<GlobalConfig>,
     ) -> Result<(), ApplyError> {
         if let Some(profile_tags) = global_config.all_profiles.get(&self.profiles[idx]) {
             for (tag, checked) in &mut self.tags {
@@ -58,7 +59,11 @@ impl App {
         Ok(())
     }
 
-    fn toggle_tag(&mut self, idx: usize, global_config: &GlobalConfig) -> Result<(), ApplyError> {
+    fn toggle_tag(
+        &mut self,
+        idx: usize,
+        global_config: &Arc<GlobalConfig>,
+    ) -> Result<(), ApplyError> {
         if let Some(tag) = self.tags.get_mut(idx) {
             tag.1 = !tag.1;
         }
@@ -66,7 +71,10 @@ impl App {
         Ok(())
     }
 
-    fn update_execution_plan(&mut self, global_config: &GlobalConfig) -> Result<(), ApplyError> {
+    fn update_execution_plan(
+        &mut self,
+        global_config: &Arc<GlobalConfig>,
+    ) -> Result<(), ApplyError> {
         let active_tags = self
             .tags
             .iter()
@@ -106,7 +114,7 @@ impl App {
 }
 
 pub(crate) fn run_tui(
-    global_config: &GlobalConfig,
+    global_config: &Arc<GlobalConfig>,
     _cli: &Cli,
     tags: &[String],
     profile: &Option<String>,

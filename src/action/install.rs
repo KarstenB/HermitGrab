@@ -5,13 +5,11 @@ use std::{
     sync::Mutex,
 };
 
-use handlebars::Handlebars;
-
 use crate::{
-    RequireTag,
+    HermitConfig, RequireTag,
     action::{Action, ActionOutput},
     config::Tag,
-    hermitgrab_error::{ActionError, InstallActionError},
+    hermitgrab_error::{ActionError, ConfigLoadError, InstallActionError},
 };
 
 pub struct InstallAction {
@@ -23,8 +21,6 @@ pub struct InstallAction {
     pre_install_cmd: Option<String>,
     post_install_cmd: Option<String>,
     install_cmd: String,
-    version: Option<String>,
-    variables: BTreeMap<String, String>,
     output: Mutex<Option<ActionOutput>>,
 }
 impl InstallAction {
@@ -39,9 +35,22 @@ impl InstallAction {
         post_install_cmd: Option<String>,
         install_cmd: String,
         version: Option<String>,
-        variables: BTreeMap<String, String>,
-    ) -> Self {
-        Self {
+        mut variables: BTreeMap<String, String>,
+        cfg: &HermitConfig,
+    ) -> Result<Self, ConfigLoadError> {
+        variables.insert("name".to_string(), name.clone());
+        variables.insert("version".to_string(), version.clone().unwrap_or_default());
+        let pre_install_cmd = pre_install_cmd
+            .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
+            .transpose()?;
+        let post_install_cmd = post_install_cmd
+            .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
+            .transpose()?;
+        let check_cmd = check_cmd
+            .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
+            .transpose()?;
+        let install_cmd = cfg.global_config().prepare_cmd(&install_cmd, &variables)?;
+        Ok(Self {
             id,
             name,
             requires: requires.into_iter().collect(),
@@ -50,10 +59,8 @@ impl InstallAction {
             pre_install_cmd,
             post_install_cmd,
             install_cmd,
-            version,
-            variables,
             output: Mutex::new(None),
-        }
+        })
     }
 
     fn install_required(&self) -> Result<bool, ActionError> {
@@ -71,20 +78,6 @@ impl InstallAction {
         Ok(true)
     }
 
-    fn prepare_cmd(&self, cmd: &str) -> Result<String, ActionError> {
-        let reg = Handlebars::new();
-        let mut data = self.variables.clone();
-        data.insert("name".to_string(), self.name.clone());
-        if let Some(version) = &self.version {
-            data.insert("version".to_string(), version.clone());
-        }
-        let template = shellexpand::tilde(cmd).to_string();
-        let cmd = reg
-            .render_template(&template, &data)
-            .map_err(InstallActionError::RenderError)?;
-        Ok(cmd)
-    }
-
     fn update_output(&self, cmd: &String, output: Output, name: &str) -> Result<(), ActionError> {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -96,11 +89,11 @@ impl InstallAction {
         let mut mutex_guard = self.output.lock().expect("Expected to unlock output mutex");
         if let Some(action_output) = mutex_guard.as_mut() {
             // If output is already set, append to it
-            action_output.add(name, &stdout, &stderr);
+            action_output.add(name, stdout, stderr);
         } else {
             // Otherwise, create a new output
             let mut action_output = ActionOutput::default();
-            action_output.add(name, &stdout, &stderr);
+            action_output.add(name, stdout, stderr);
             *mutex_guard = Some(action_output);
         }
         let status = output.status;
@@ -136,31 +129,37 @@ impl Action for InstallAction {
             return Ok(()); // Installation not required
         }
         if let Some(ref pre_cmd) = self.pre_install_cmd {
-            let cmd = self.prepare_cmd(pre_cmd)?;
-            let output = execute_script(&cmd);
+            let output = execute_script(pre_cmd);
             match output {
                 Ok(output) => {
-                    self.update_output(&cmd, output, "pre_cmd")?;
+                    self.update_output(pre_cmd, output, "pre_cmd")?;
                 }
-                Err(e) => Err(InstallActionError::PreCommandFailedLaunch(cmd, e))?,
+                Err(e) => Err(InstallActionError::PreCommandFailedLaunch(
+                    pre_cmd.to_string(),
+                    e,
+                ))?,
             }
         }
-        let cmd = self.prepare_cmd(&self.install_cmd)?;
-        let output = execute_script(&cmd);
+        let output = execute_script(&self.install_cmd);
         match output {
             Ok(output) => {
-                self.update_output(&cmd, output, "install_cmd")?;
+                self.update_output(&self.install_cmd, output, "install_cmd")?;
             }
-            Err(e) => Err(InstallActionError::CommandFailedLaunch(cmd, e))?,
+            Err(e) => Err(InstallActionError::CommandFailedLaunch(
+                self.install_cmd.clone(),
+                e,
+            ))?,
         }
         if let Some(ref post_cmd) = self.post_install_cmd {
-            let cmd = self.prepare_cmd(post_cmd)?;
-            let output = execute_script(&cmd);
+            let output = execute_script(post_cmd);
             match output {
                 Ok(output) => {
-                    self.update_output(&cmd, output, "post_cmd")?;
+                    self.update_output(post_cmd, output, "post_cmd")?;
                 }
-                Err(e) => Err(InstallActionError::PostCommandFailedLaunch(cmd, e))?,
+                Err(e) => Err(InstallActionError::PostCommandFailedLaunch(
+                    post_cmd.to_string(),
+                    e,
+                ))?,
             }
         }
         Ok(())

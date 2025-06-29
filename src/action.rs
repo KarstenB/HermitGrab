@@ -22,7 +22,7 @@ impl ActionOutput {
         output
     }
 
-    fn add(&mut self, name: &str, stdout: &str, stderr: &str) -> () {
+    fn add(&mut self, name: &str, stdout: &str, stderr: &str) {
         if !stdout.is_empty() {
             self.standard_output
                 .insert(name.to_string(), stdout.to_string());

@@ -169,14 +169,15 @@ pub(crate) fn add_link(
     } else {
         PathBuf::from("~").join(target)
     };
-    let source_filename = source
+    let source_filename: PathBuf = source
         .file_name()
         .ok_or(AddError::FileNameError)?
         .to_string_lossy()
-        .to_string();
+        .to_string()
+        .into();
     let file_entry = DotfileEntry {
         source: source_filename.clone(),
-        target: target.to_string_lossy().to_string(),
+        target,
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
         fallback: *fallback,
@@ -204,11 +205,13 @@ fn insert_into_existing(config_file: &PathBuf, file_entry: &DotfileEntry) -> Res
                 let Item::Value(Value::String(ref target)) = entry["target"] else {
                     continue;
                 };
-                let source_str = source.value();
-                let target_str = target.value();
-                if source_str == &file_entry.source && target_str == &file_entry.target {
+                let source_str = PathBuf::from(source.value());
+                let target_str = PathBuf::from(target.value());
+                if source_str == file_entry.source && target_str == file_entry.target {
                     error!(
-                        "The [[files]] table already contains an entry with the same source {source_str} and target {target_str}"
+                        "The [[files]] table already contains an entry with the same source {} and target {}",
+                        source_str.display(),
+                        target_str.display()
                     );
                     return Err(AddError::SourceAlreadyExists(file_entry.source.clone()));
                 }
