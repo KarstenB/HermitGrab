@@ -14,12 +14,13 @@ pub mod common_cli;
 pub mod config;
 pub mod detector;
 pub mod execution_plan;
+pub mod file_ops;
 pub mod hermitgrab_error;
 pub mod integrations;
 
-pub use crate::config::{DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag};
 use crate::config::{FallbackOperation, GlobalConfig, Tag, find_hermit_files};
-pub use crate::hermitgrab_error::AtomicLinkError;
+pub use crate::config::{HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag};
+pub use crate::hermitgrab_error::FileOpsError;
 use crate::{
     common_cli::{hermitgrab_info, info},
     config::CONF_FILE_NAME,

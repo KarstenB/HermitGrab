@@ -1,12 +1,7 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io::Write,
-    process::Output,
-    sync::Mutex,
-};
+use std::{io::Write, process::Output, sync::Mutex};
 
 use crate::{
-    HermitConfig, RequireTag,
+    HermitConfig, InstallConfig, RequireTag,
     action::{Action, ActionOutput},
     config::Tag,
     hermitgrab_error::{ActionError, ConfigLoadError, InstallActionError},
@@ -27,32 +22,52 @@ impl InstallAction {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
-        name: String,
-        requires: BTreeSet<RequireTag>,
-        provides: BTreeSet<Tag>,
-        check_cmd: Option<String>,
-        pre_install_cmd: Option<String>,
-        post_install_cmd: Option<String>,
-        install_cmd: String,
-        version: Option<String>,
-        mut variables: BTreeMap<String, String>,
+        install_entry: &InstallConfig,
         cfg: &HermitConfig,
     ) -> Result<Self, ConfigLoadError> {
-        variables.insert("name".to_string(), name.clone());
-        variables.insert("version".to_string(), version.clone().unwrap_or_default());
-        let pre_install_cmd = pre_install_cmd
+        let lc_src = install_entry.source.to_lowercase();
+        let install_cmd = cfg
+            .sources
+            .get(&lc_src)
+            .or(cfg.global_config().all_sources.get(&lc_src));
+        let Some(install_cmd) = install_cmd else {
+            return Err(ConfigLoadError::InstallSourceNotFound(lc_src.clone()));
+        };
+        let mut variables = install_entry.variables.clone();
+        variables.insert(
+            "hermit_root_dir".to_string(),
+            cfg.global_config().root_dir.to_string_lossy().to_string(),
+        );
+        variables.insert(
+            "hermit_this_dir".to_string(),
+            cfg.directory().to_string_lossy().to_string(),
+        );
+        variables.insert("name".to_string(), install_entry.name.clone());
+        variables.insert(
+            "version".to_string(),
+            install_entry.version.clone().unwrap_or_default(),
+        );
+        let pre_install_cmd = install_entry
+            .pre_install_cmd
+            .as_deref()
             .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
             .transpose()?;
-        let post_install_cmd = post_install_cmd
+        let post_install_cmd = install_entry
+            .post_install_cmd
+            .as_deref()
             .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
             .transpose()?;
-        let check_cmd = check_cmd
+        let check_cmd = install_entry
+            .check_cmd
+            .as_deref()
             .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
             .transpose()?;
         let install_cmd = cfg.global_config().prepare_cmd(&install_cmd, &variables)?;
+        let requires = install_entry.get_requires(cfg);
+        let provides = install_entry.get_provides(cfg);
         Ok(Self {
             id,
-            name,
+            name: install_entry.name.clone(),
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
             check_cmd,

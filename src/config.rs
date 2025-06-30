@@ -14,6 +14,7 @@ use std::sync::Arc;
 use toml_edit::DocumentMut;
 
 use crate::detector::detect_builtin_tags;
+use crate::file_ops::check_copied;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigLoadError;
 
@@ -190,13 +191,13 @@ pub struct HermitConfig {
     pub provides: BTreeSet<Tag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub file: Vec<DotfileEntry>,
+    pub file: Vec<LinkConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub patch: Vec<PatchfileEntry>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub install: Vec<InstallEntry>,
+    pub install: Vec<InstallConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub sources: BTreeMap<String, String>,
@@ -225,7 +226,7 @@ impl HermitConfig {
         &self.global_cfg
     }
 
-    pub(crate) fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigLoadError> {
+    pub fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigLoadError> {
         let content = toml::to_string(self)
             .map_err(|e| ConfigLoadError::SerializeTomlError(e, conf_file_name.clone()))?;
         std::fs::write(conf_file_name, content)
@@ -309,7 +310,7 @@ pub struct PatchfileEntry {
     pub requires: BTreeSet<RequireTag>,
 }
 impl PatchfileEntry {
-    pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
+    pub fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
         for tag in cfg.provides.iter() {
             requires.insert(RequireTag::Positive(tag.0.clone()));
@@ -322,7 +323,7 @@ impl PatchfileEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct DotfileEntry {
+pub struct LinkConfig {
     pub source: PathBuf,
     pub target: PathBuf,
     #[serde(default)]
@@ -331,6 +332,9 @@ pub struct DotfileEntry {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub provides: BTreeSet<Tag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default_fallback")]
     pub fallback: FallbackOperation,
@@ -385,10 +389,12 @@ pub enum FileStatus {
     FailedToGetMetadata(PathBuf),
     InodeMismatch(PathBuf),
     SizeDiffers(PathBuf, u64, u64),
-    FailedToAccessFile(PathBuf, std::io::Error),
-    FailedToTraverseDir(PathBuf, std::io::Error),
     SrcIsFileButTargetIsDir(PathBuf),
     SrcIsDirButTargetIsFile(PathBuf),
+    HashDiffers(PathBuf, blake3::Hash, blake3::Hash),
+    FailedToAccessFile(PathBuf, std::io::Error),
+    FailedToTraverseDir(PathBuf, std::io::Error),
+    FailedToHashFile(PathBuf, std::io::Error),
 }
 impl FileStatus {
     pub fn is_ok(&self) -> bool {
@@ -438,11 +444,18 @@ impl Display for FileStatus {
                 f,
                 "Src is a directory, but destination {path_buf:?} is a file"
             ),
+            FileStatus::FailedToHashFile(path_buf, error) => {
+                write!(f, "Failed to hash the file {path_buf:?}, error was {error}")
+            }
+            FileStatus::HashDiffers(path_buf, src_hash, dst_hash) => write!(
+                f,
+                "The hash of the file {path_buf:?} differs: {src_hash} (src) vs {dst_hash} (dst)"
+            ),
         }
     }
 }
 
-impl DotfileEntry {
+impl LinkConfig {
     pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
         for tag in cfg.provides.iter() {
@@ -452,6 +465,14 @@ impl DotfileEntry {
             requires.insert(tag.clone());
         }
         requires
+    }
+
+    pub(crate) fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
+        let mut provides = self.provides.clone();
+        for tag in cfg.provides.iter() {
+            provides.insert(tag.clone());
+        }
+        provides
     }
 
     pub(crate) fn check(&self, cfg: &HermitConfig, quick: bool) -> FileStatus {
@@ -506,66 +527,15 @@ impl DotfileEntry {
                     return check_copied(quick, src_file, actual_dst);
                 }
             }
-            LinkType::Copy => check_copied(quick, src_file, actual_dst),
+            LinkType::Copy => check_copied(quick, &src_file, &actual_dst),
         }
     }
 }
 
-fn check_copied(quick: bool, src_file: PathBuf, actual_dst: PathBuf) -> FileStatus {
-    match actual_dst.try_exists() {
-        Ok(exists) => {
-            if !exists {
-                return FileStatus::DestinationDoesNotExist(actual_dst);
-            }
-        }
-        Err(e) => return FileStatus::FailedToAccessFile(actual_dst, e),
-    }
-    if actual_dst.is_file() {
-        if !src_file.is_file() {
-            return FileStatus::SrcIsDirButTargetIsFile(actual_dst);
-        }
-        let Ok(dst_meta) = actual_dst.metadata() else {
-            return FileStatus::FailedToGetMetadata(actual_dst);
-        };
-        let Ok(src_meta) = src_file.metadata() else {
-            return FileStatus::FailedToGetMetadata(src_file);
-        };
-        if src_meta.len() != dst_meta.len() {
-            return FileStatus::SizeDiffers(actual_dst, src_meta.len(), dst_meta.len());
-        }
-        if !quick {
-            todo!("blake3 the contents and determine mismatch")
-        }
-        FileStatus::Ok
-    } else {
-        if !src_file.is_dir() {
-            return FileStatus::SrcIsFileButTargetIsDir(actual_dst);
-        }
-        match src_file.read_dir() {
-            Ok(e) => {
-                for f in e {
-                    let fs = match f {
-                        Ok(file) => {
-                            check_copied(quick, file.path(), actual_dst.join(file.file_name()))
-                        }
-                        Err(e) => return FileStatus::FailedToTraverseDir(src_file, e),
-                    };
-                    if !fs.is_ok() {
-                        return fs;
-                    }
-                }
-            }
-            Err(e) => {
-                return FileStatus::FailedToTraverseDir(src_file, e);
-            }
-        }
-        FileStatus::Ok
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct InstallEntry {
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct InstallConfig {
     pub name: String,
+    pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub check_cmd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -573,27 +543,19 @@ pub struct InstallEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub post_install_cmd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub provides: BTreeSet<Tag>,
+    #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, String>,
 }
 
-impl InstallEntry {
-    pub fn to_handlebars_map(&self) -> BTreeMap<String, String> {
-        let mut map = self.variables.clone();
-        map.insert("name".to_string(), self.name.clone());
-        if let Some(version) = &self.version {
-            map.insert("version".to_string(), version.clone());
-        }
-        map
-    }
-
+impl InstallConfig {
     pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
         for tag in cfg.provides.iter() {
@@ -603,6 +565,14 @@ impl InstallEntry {
             requires.insert(tag.clone());
         }
         requires
+    }
+
+    pub(crate) fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
+        let mut provides = self.provides.clone();
+        for tag in cfg.provides.iter() {
+            provides.insert(tag.clone());
+        }
+        provides
     }
 }
 

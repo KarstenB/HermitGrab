@@ -1,19 +1,13 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::{
-    HermitConfig, LinkType, RequireTag,
+    HermitConfig, LinkConfig, LinkType, RequireTag,
     action::Action,
     config::{FallbackOperation, Tag},
+    file_ops::link_files,
     hermitgrab_error::{ActionError, LinkActionError},
     user_home,
 };
-
-use crate::hermitgrab_error::AtomicLinkError;
-use crate::info;
-use std::ffi::OsString;
-use std::fs::{self, hard_link};
-use std::path::Path;
-
 pub struct LinkAction {
     id: String,
     rel_src: String,
@@ -26,39 +20,32 @@ pub struct LinkAction {
     fallback: FallbackOperation,
 }
 impl LinkAction {
-    pub(crate) fn new(
-        id: String,
-        config_dir: &Path,
-        src: PathBuf,
-        dst: PathBuf,
-        requires: BTreeSet<RequireTag>,
-        provides: BTreeSet<Tag>,
-        link_type: LinkType,
-        fallback: FallbackOperation,
-        cfg: &HermitConfig,
-    ) -> Self {
-        let rel_src = src
-            .strip_prefix(config_dir)
-            .unwrap_or(&src)
+    pub(crate) fn new(id: String, link_config: &LinkConfig, cfg: &HermitConfig) -> Self {
+        let abs_src = cfg.directory().join(&link_config.source);
+        let rel_src = link_config
+            .source
+            .strip_prefix(cfg.directory())
+            .unwrap_or(&link_config.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.global_config().expand_directory(&dst);
+        let dst = cfg.global_config().expand_directory(&link_config.target);
         let rel_dst = dst
             .strip_prefix(user_home())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
-
+        let provides = link_config.get_provides(cfg);
+        let requires = link_config.get_requires(cfg);
         Self {
             id,
-            src,
+            src: abs_src,
             rel_src,
             dst,
             rel_dst,
-            link_type,
+            link_type: link_config.link.clone(),
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
-            fallback,
+            fallback: link_config.fallback.clone(),
         }
     }
 }
@@ -96,114 +83,6 @@ impl Action for LinkAction {
     }
 }
 
-pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
-    src: P,
-    dst: Q,
-    link_type: &LinkType,
-    fall_back: &FallbackOperation,
-) -> Result<(), AtomicLinkError> {
-    let src = src.as_ref();
-    let dst = dst.as_ref();
-    if !src.exists() {
-        return Err(AtomicLinkError::SourceNotFound(src.display().to_string()));
-    }
-    if dst.exists() {
-        // If destination is a symlink to src, do nothing
-        if let Ok(target) = dst.read_link() {
-            if target == src {
-                return Ok(());
-            }
-        }
-        if !dst.is_symlink() {
-            match fall_back {
-                FallbackOperation::Abort => {
-                    return Err(AtomicLinkError::DestinationExists(
-                        dst.display().to_string(),
-                    ));
-                }
-                FallbackOperation::Backup => {
-                    let mut base_file_name = dst.file_name().expect("file name").to_os_string();
-                    base_file_name.push(OsString::from(".bak"));
-                    let backup_file = dst.with_file_name(base_file_name);
-                    if !backup_file.exists() {
-                        std::fs::rename(dst, &backup_file)?;
-                    } else {
-                        return Err(AtomicLinkError::BackupAlreadyExists(
-                            dst.display().to_string(),
-                        ));
-                    }
-                }
-                FallbackOperation::BackupOverwrite => {
-                    let mut base_file_name = dst.file_name().expect("file name").to_os_string();
-                    base_file_name.push(OsString::from(".bak"));
-                    let backup_file = dst.with_file_name(base_file_name);
-                    std::fs::rename(dst, &backup_file)?;
-                }
-                FallbackOperation::Delete => {
-                    if dst.is_dir() {
-                        std::fs::remove_dir(dst)?;
-                    } else {
-                        std::fs::remove_file(dst)?;
-                    }
-                }
-                FallbackOperation::DeleteDir => {
-                    if dst.is_dir() {
-                        std::fs::remove_dir_all(dst)?;
-                    } else {
-                        std::fs::remove_file(dst)?;
-                    }
-                }
-            }
-        }
-    }
-    let dst_parent = dst.parent();
-    if let Some(dst_parent) = dst_parent {
-        if !dst_parent.exists() {
-            fs::create_dir_all(dst_parent)?;
-        }
-    }
-    match link_type {
-        LinkType::Soft => {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::symlink;
-                symlink(src, dst)?;
-            }
-            #[cfg(windows)]
-            {
-                use std::os::windows::fs::symlink_file;
-                symlink_file(src, dst)?;
-            }
-        }
-        LinkType::Hard => {
-            hard_link(src, dst)?;
-        }
-        LinkType::Copy => {
-            copy(src, dst)?;
-        }
-    }
-    Ok(())
-}
-
-pub fn copy(src: &Path, dst: &Path) -> std::io::Result<()> {
-    if src.is_file() {
-        if let Some(parent) = dst.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)?;
-            }
-        }
-        info!("Copying file {src:?} to {dst:?}");
-        std::fs::copy(src, dst)?;
-    } else {
-        info!("Copying dir {src:?} to {dst:?}");
-        for file in src.read_dir()? {
-            let entry = file?;
-            copy(&entry.path(), dst.join(entry.file_name()).as_path())?;
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use crate::LinkType;
@@ -236,7 +115,7 @@ mod tests {
         let result = link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort);
         assert!(matches!(
             result,
-            Err(crate::AtomicLinkError::SourceNotFound(_))
+            Err(crate::FileOpsError::SourceNotFound(_))
         ));
     }
 
@@ -250,7 +129,7 @@ mod tests {
         let result = link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort);
         assert!(matches!(
             result,
-            Err(crate::AtomicLinkError::DestinationExists(_))
+            Err(crate::FileOpsError::DestinationExists(_))
         ));
         fs::remove_file(&src).unwrap();
         fs::remove_file(&dst).unwrap();

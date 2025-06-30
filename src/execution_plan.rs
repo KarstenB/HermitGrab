@@ -90,20 +90,13 @@ pub fn create_execution_plan(
 ) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<ArcAction> = Vec::new();
     for cfg in global_config.subconfigs.values() {
-        for file in &cfg.file {
-            let id = format!("link:{}:{}", cfg.path().display(), file.target.display());
-            let source = cfg.directory().join(&file.source);
-            actions.push(Arc::new(LinkAction::new(
-                id,
-                &global_config.root_dir,
-                source,
-                file.target.clone(),
-                file.get_requires(cfg),
-                cfg.provides.clone(),
-                file.link,
-                file.fallback,
-                cfg,
-            )));
+        for link_config in &cfg.file {
+            let id = format!(
+                "link:{}:{}",
+                cfg.path().display(),
+                link_config.target.display()
+            );
+            actions.push(Arc::new(LinkAction::new(id, link_config, cfg)));
         }
         for patch in &cfg.patch {
             let id = format!("link:{}:{}", cfg.path().display(), patch.target.display());
@@ -123,40 +116,9 @@ pub fn create_execution_plan(
                 cfg,
             )));
         }
-        for inst in &cfg.install {
-            // Filter install actions by tags
-            let id = format!("install:{}:{}", cfg.path().display(), inst.name);
-            // Use global_config.all_sources for install_cmd
-            let install_cmd = inst
-                .source
-                .as_ref()
-                .and_then(|src| global_config.all_sources.get(&src.to_lowercase()))
-                .or_else(|| global_config.all_sources.get(&inst.name.to_lowercase()));
-            let Some(install_cmd) = install_cmd else {
-                return Err(ApplyError::InstallSourceNotFound(inst.name.clone()));
-            };
-            let mut variables = inst.variables.clone();
-            variables.insert(
-                "hermit_root_dir".to_string(),
-                global_config.root_dir.to_string_lossy().to_string(),
-            );
-            variables.insert(
-                "hermit_this_dir".to_string(),
-                cfg.directory().to_string_lossy().to_string(),
-            );
-            actions.push(Arc::new(InstallAction::new(
-                id,
-                inst.name.clone(),
-                inst.get_requires(cfg),
-                cfg.provides.clone(),
-                inst.check_cmd.clone(),
-                inst.pre_install_cmd.clone(),
-                inst.post_install_cmd.clone(),
-                install_cmd.clone(),
-                inst.version.clone(),
-                variables,
-                cfg,
-            )?));
+        for install_entry in &cfg.install {
+            let id = format!("install:{}:{}", cfg.path().display(), install_entry.name);
+            actions.push(Arc::new(InstallAction::new(id, install_entry, cfg)?));
         }
     }
     Ok(ExecutionPlan { actions })
@@ -167,46 +129,48 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::{HermitConfig, LinkType, config::FallbackOperation};
+    use crate::{HermitConfig, LinkConfig, LinkType, config::FallbackOperation};
 
     #[test]
     fn test_topology_sorting() {
         let default_config = Arc::new(GlobalConfig::default());
-        let cfg = HermitConfig::create_new(&PathBuf::from("/tmp/hermitgrab"), default_config);
+        let mut cfg = HermitConfig::create_new(&PathBuf::from("/tmp/hermitgrab"), default_config);
+        cfg.sources
+            .insert("install_source".to_string(), "install_cmd".to_string());
         let link_action_a = Arc::new(LinkAction::new(
             "link:action_a".to_string(),
-            &PathBuf::from("/tmp/hermitgrab"),
-            PathBuf::from("/source/a"),
-            PathBuf::from("target_a"),
-            BTreeSet::new(),
-            BTreeSet::from_iter(vec![Tag::from_str("tag_a").unwrap()]),
-            LinkType::Soft,
-            FallbackOperation::Abort,
+            &LinkConfig {
+                source: PathBuf::from("/source/a"),
+                target: PathBuf::from("target_a"),
+                link: LinkType::Soft,
+                requires: BTreeSet::from_iter(vec![RequireTag::Positive("tag_a".to_string())]),
+                provides: BTreeSet::from_iter(vec![Tag::from_str("tag_a").unwrap()]),
+                fallback: FallbackOperation::Abort,
+            },
             &cfg,
         ));
         let link_action_b = Arc::new(LinkAction::new(
             "link:action_b".to_string(),
-            &PathBuf::from("/tmp/hermitgrab"),
-            "/source/b".into(),
-            "target_b".into(),
-            BTreeSet::from_iter(vec![RequireTag::Positive("tag_a".to_string())]),
-            BTreeSet::from_iter(vec![Tag::from_str("tag_b").unwrap()]),
-            LinkType::Soft,
-            FallbackOperation::Abort,
+            &LinkConfig {
+                source: PathBuf::from("/source/b"),
+                target: PathBuf::from("target_b"),
+                link: LinkType::Soft,
+                requires: BTreeSet::from_iter(vec![RequireTag::Positive("tag_a".to_string())]),
+                provides: BTreeSet::from_iter(vec![Tag::from_str("tag_b").unwrap()]),
+                fallback: FallbackOperation::Abort,
+            },
             &cfg,
         ));
         let install_action = Arc::new(
             InstallAction::new(
                 "install:action".to_string(),
-                "install_action".to_string(),
-                BTreeSet::from_iter(vec![RequireTag::Positive("tag_b".to_string())]),
-                BTreeSet::from_iter(vec![Tag::from_str("tag_install").unwrap()]),
-                None,
-                None,
-                None,
-                "install_cmd".to_string(),
-                None,
-                std::collections::BTreeMap::new(),
+                &crate::InstallConfig {
+                    name: "action".to_string(),
+                    source: "install_source".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    requires: BTreeSet::from_iter(vec![RequireTag::Positive("tag_b".to_string())]),
+                    ..Default::default()
+                },
                 &cfg,
             )
             .unwrap(),

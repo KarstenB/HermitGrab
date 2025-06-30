@@ -7,14 +7,14 @@ use std::{
 use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 
 use crate::{
-    DotfileEntry, HermitConfig, InstallEntry, LinkType, RequireTag,
-    action::link::copy,
-    choice,
+    HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice,
     common_cli::{hint, prompt},
     config::{
         CONF_FILE_NAME, FallbackOperation, Source::CommandLine, Tag, load_hermit_config_editable,
     },
-    error, hermit_dir,
+    error,
+    file_ops::copy,
+    hermit_dir,
     hermitgrab_error::AddError,
     info, success, user_home,
 };
@@ -23,8 +23,8 @@ pub(crate) fn add_config(
     config_dir: &PathBuf,
     provided_tags: &[Tag],
     required_tags: &[RequireTag],
-    files: &[DotfileEntry],
-    installs: &[InstallEntry],
+    files: &[LinkConfig],
+    installs: &[InstallConfig],
 ) -> Result<(), AddError> {
     let config_file = if config_dir.ends_with(CONF_FILE_NAME) {
         config_dir.clone()
@@ -175,11 +175,12 @@ pub(crate) fn add_link(
         .to_string_lossy()
         .to_string()
         .into();
-    let file_entry = DotfileEntry {
+    let file_entry = LinkConfig {
         source: source_filename.clone(),
         target,
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
+        provides: BTreeSet::new(),
         fallback: *fallback,
     };
     if config_file.exists() {
@@ -192,7 +193,7 @@ pub(crate) fn add_link(
     Ok(())
 }
 
-fn insert_into_existing(config_file: &PathBuf, file_entry: &DotfileEntry) -> Result<(), AddError> {
+fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Result<(), AddError> {
     let table = to_table(file_entry)?;
     let mut config = load_hermit_config_editable(config_file)?;
     let files = config["files"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
@@ -230,7 +231,7 @@ fn insert_into_existing(config_file: &PathBuf, file_entry: &DotfileEntry) -> Res
     Ok(())
 }
 
-fn to_table(file_entry: &DotfileEntry) -> Result<toml_edit::Table, AddError> {
+fn to_table(file_entry: &LinkConfig) -> Result<toml_edit::Table, AddError> {
     let value =
         serde::Serialize::serialize(file_entry, toml_edit::ser::ValueSerializer::new()).unwrap();
     let item: Item = value.into();
@@ -314,11 +315,11 @@ pub(crate) fn add_profile(name: &str, tags: &[Tag]) -> Result<(), AddError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DotfileEntry;
+    use crate::LinkConfig;
 
     #[test]
     pub fn test_to_table() {
-        let entry = DotfileEntry::default();
+        let entry = LinkConfig::default();
         to_table(&entry).unwrap();
     }
 }

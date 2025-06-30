@@ -5,7 +5,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum HermitGrabError {
     #[error(transparent)]
-    AtomicLinkError(#[from] AtomicLinkError),
+    AtomicLinkError(#[from] FileOpsError),
     #[error(transparent)]
     ConfigLoadError(#[from] ConfigLoadError),
     #[error(transparent)]
@@ -13,13 +13,13 @@ pub enum HermitGrabError {
 }
 
 #[derive(Debug, Error)]
-pub enum AtomicLinkError {
+pub enum FileOpsError {
     #[error("Source does not exist: {0}")]
     SourceNotFound(String),
     #[error("Destination is an existing file: {0}")]
     DestinationExists(String),
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    #[error("{0}, IO error: {1}")]
+    Io(PathBuf, std::io::Error),
     #[error("Failed to find a backup file name for {0}")]
     BackupAlreadyExists(String),
 }
@@ -40,6 +40,8 @@ pub enum ConfigLoadError {
     DeserializeDocumentTomlError(toml_edit::TomlError, PathBuf),
     #[error(transparent)]
     RenderError(#[from] handlebars::RenderError),
+    #[error("Failed to find source: {0}")]
+    InstallSourceNotFound(String),
 }
 
 #[derive(Debug, Error)]
@@ -67,6 +69,8 @@ pub enum PatchActionError {
 pub enum AddError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    FileOpsError(#[from] FileOpsError),
     #[error(transparent)]
     ConfigLoadError(#[from] ConfigLoadError),
     #[error("Failed to determine home directory")]
@@ -130,7 +134,7 @@ pub enum LinkActionError {
     #[error("Failed to create parent directory for destination {1} due to IO error: {0}")]
     CreateParentDir(std::io::Error, PathBuf),
     #[error(transparent)]
-    AtomicLinkError(#[from] AtomicLinkError),
+    AtomicLinkError(#[from] FileOpsError),
 }
 
 #[derive(Debug, Error)]
