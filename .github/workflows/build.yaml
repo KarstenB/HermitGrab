@@ -1,0 +1,44 @@
+name: Build
+
+jobs:
+  build-linux-win:
+    runs-on: ubuntu-latest
+    permissions: 
+      contents: write
+    steps:
+
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2 
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and run Dev Container task
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: ghcr.io/karstenb/hermitgrab-devcontainer
+          runCmd: |
+            cargo make build-linux-win
+  
+  build-macos:
+    runs-on: macos-latest # Use a macOS runner for native compilation
+    permissions: 
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        target: x86_64-apple-darwin, aarch64-apple-darwin # Build for Intel and Apple Silicon
+
+    - uses: davidB/rust-cargo-make@v1
+    - name: Build Release Binaries x86_64
+      run: cargo make build-mac-x86_64
+    - name: Build Release Binaries aarch64
+      run: cargo make build-mac-aarch64
