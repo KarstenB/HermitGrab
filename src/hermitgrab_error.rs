@@ -7,7 +7,7 @@ pub enum HermitGrabError {
     #[error(transparent)]
     AtomicLinkError(#[from] FileOpsError),
     #[error(transparent)]
-    ConfigLoadError(#[from] ConfigLoadError),
+    ConfigLoadError(#[from] ConfigError),
     #[error(transparent)]
     ApplyError(#[from] ApplyError),
 }
@@ -25,10 +25,10 @@ pub enum FileOpsError {
 }
 
 #[derive(Debug, Error)]
-pub enum ConfigLoadError {
+pub enum ConfigError {
     #[error("Redeclaration of source: {0} found in file {1}")]
     DuplicateSource(String, PathBuf),
-    #[error("An error occurred while loading the configuration file {1}: {0}")]
+    #[error("An error occurred while handling the configuration file {1}: {0}")]
     IoError(std::io::Error, PathBuf),
     #[error("An error occurred while parsing the configuration file {1}: {0}")]
     DeserializeTomlError(toml::de::Error, PathBuf),
@@ -72,7 +72,7 @@ pub enum AddError {
     #[error(transparent)]
     FileOpsError(#[from] FileOpsError),
     #[error(transparent)]
-    ConfigLoadError(#[from] ConfigLoadError),
+    ConfigLoadError(#[from] ConfigError),
     #[error("Failed to determine home directory")]
     NoHomeDir,
     #[error("Invalid choice")]
@@ -101,6 +101,8 @@ pub enum AddError {
     StripPrefixError(#[from] StripPrefixError),
     #[error("A source with the file {0} already exists")]
     SourceAlreadyExists(PathBuf),
+    #[error("The configuration file {0} already exists")]
+    ConfigFileAlreadyExists(PathBuf),
 }
 
 #[derive(Debug, Error)]
@@ -116,7 +118,7 @@ pub enum ApplyError {
     #[error("Failed to find tag: {0}")]
     TagNotFound(String),
     #[error(transparent)]
-    ConfigLoadError(#[from] ConfigLoadError),
+    ConfigLoadError(#[from] ConfigError),
 }
 
 #[derive(Debug, Error)]

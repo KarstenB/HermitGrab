@@ -26,11 +26,26 @@ pub(crate) fn add_config(
     files: &[LinkConfig],
     installs: &[InstallConfig],
 ) -> Result<(), AddError> {
-    let config_file = if config_dir.ends_with(CONF_FILE_NAME) {
+    let config_dir = if config_dir.ends_with(CONF_FILE_NAME) {
+        config_dir
+            .parent()
+            .expect("Failed to get parent directory")
+            .to_path_buf()
+    } else {
+        config_dir.clone()
+    };
+    let config_dir = if config_dir.is_absolute() {
         config_dir.clone()
     } else {
-        config_dir.join(CONF_FILE_NAME)
+        hermit_dir().join(config_dir)
     };
+    let config_file = config_dir.join(CONF_FILE_NAME);
+    if config_file.exists() {
+        error!(
+            "The configuration file {config_file:?} already exists. Please use a different directory or remove the existing file."
+        );
+        return Err(AddError::ConfigFileAlreadyExists(config_file));
+    }
     let mut config = HermitConfig::default();
     info!("Creating a new configuration file at {config_file:?}");
     let provided_tags = if provided_tags.is_empty() {

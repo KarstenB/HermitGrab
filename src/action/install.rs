@@ -4,7 +4,7 @@ use crate::{
     HermitConfig, InstallConfig, RequireTag,
     action::{Action, ActionOutput},
     config::Tag,
-    hermitgrab_error::{ActionError, ConfigLoadError, InstallActionError},
+    hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
 pub struct InstallAction {
@@ -24,14 +24,14 @@ impl InstallAction {
         id: String,
         install_entry: &InstallConfig,
         cfg: &HermitConfig,
-    ) -> Result<Self, ConfigLoadError> {
+    ) -> Result<Self, ConfigError> {
         let lc_src = install_entry.source.to_lowercase();
         let install_cmd = cfg
             .sources
             .get(&lc_src)
             .or(cfg.global_config().all_sources.get(&lc_src));
         let Some(install_cmd) = install_cmd else {
-            return Err(ConfigLoadError::InstallSourceNotFound(lc_src.clone()));
+            return Err(ConfigError::InstallSourceNotFound(lc_src.clone()));
         };
         let mut variables = install_entry.variables.clone();
         variables.insert(

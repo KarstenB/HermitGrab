@@ -16,7 +16,7 @@ use toml_edit::DocumentMut;
 use crate::detector::detect_builtin_tags;
 use crate::file_ops::check_copied;
 use crate::hermitgrab_error::ApplyError;
-use crate::hermitgrab_error::ConfigLoadError;
+use crate::hermitgrab_error::ConfigError;
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
@@ -226,11 +226,11 @@ impl HermitConfig {
         &self.global_cfg
     }
 
-    pub fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigLoadError> {
+    pub fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigError> {
         let content = toml::to_string(self)
-            .map_err(|e| ConfigLoadError::SerializeTomlError(e, conf_file_name.clone()))?;
+            .map_err(|e| ConfigError::SerializeTomlError(e, conf_file_name.clone()))?;
         std::fs::write(conf_file_name, content)
-            .map_err(|e| ConfigLoadError::IoError(e, conf_file_name.clone()))?;
+            .map_err(|e| ConfigError::IoError(e, conf_file_name.clone()))?;
         Ok(())
     }
 
@@ -587,7 +587,7 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Self, ConfigLoadError> {
+    pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Self, ConfigError> {
         let mut subconfigs = BTreeMap::new();
         let mut all_profiles = BTreeMap::new();
         let mut all_provided_tags = BTreeSet::new();
@@ -599,7 +599,7 @@ impl GlobalConfig {
             }
             for (k, v) in &config.sources {
                 if all_sources.contains_key(&k.to_lowercase()) {
-                    return Err(ConfigLoadError::DuplicateSource(k.to_string(), config.path));
+                    return Err(ConfigError::DuplicateSource(k.to_string(), config.path));
                 }
                 all_sources.insert(k.to_lowercase(), v.clone());
             }
@@ -607,7 +607,7 @@ impl GlobalConfig {
             for (profile, tags) in &config.profiles {
                 let profile_lc = profile.to_lowercase();
                 if all_profiles.contains_key(&profile_lc) {
-                    return Err(ConfigLoadError::DuplicateProfile(
+                    return Err(ConfigError::DuplicateProfile(
                         profile_lc.clone(),
                         config.path.clone(),
                     ));
@@ -698,13 +698,13 @@ impl GlobalConfig {
         &self,
         cmd: &str,
         additional_variables: &BTreeMap<String, String>,
-    ) -> Result<String, ConfigLoadError> {
+    ) -> Result<String, ConfigError> {
         let reg = Handlebars::new();
         let data = additional_variables.clone();
         let template = shellexpand::tilde(cmd).to_string();
         let cmd = reg
             .render_template(&template, &data)
-            .map_err(ConfigLoadError::RenderError)?;
+            .map_err(ConfigError::RenderError)?;
         Ok(cmd)
     }
 
@@ -740,23 +740,21 @@ impl GlobalConfig {
     }
 }
 
-pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, ConfigLoadError> {
+pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| ConfigLoadError::IoError(e, path.as_ref().to_path_buf()))?;
+        .map_err(|e| ConfigError::IoError(e, path.as_ref().to_path_buf()))?;
     let mut config: HermitConfig = toml::from_str(&content)
-        .map_err(|e| ConfigLoadError::DeserializeTomlError(e, path.as_ref().to_path_buf()))?;
+        .map_err(|e| ConfigError::DeserializeTomlError(e, path.as_ref().to_path_buf()))?;
     config.path = path.as_ref().to_path_buf();
     Ok(config)
 }
 
-pub fn load_hermit_config_editable<P: AsRef<Path>>(
-    path: P,
-) -> Result<DocumentMut, ConfigLoadError> {
+pub fn load_hermit_config_editable<P: AsRef<Path>>(path: P) -> Result<DocumentMut, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| ConfigLoadError::IoError(e, path.as_ref().to_path_buf()))?;
+        .map_err(|e| ConfigError::IoError(e, path.as_ref().to_path_buf()))?;
     content
         .parse::<DocumentMut>()
-        .map_err(|e| ConfigLoadError::DeserializeDocumentTomlError(e, path.as_ref().to_path_buf()))
+        .map_err(|e| ConfigError::DeserializeDocumentTomlError(e, path.as_ref().to_path_buf()))
 }
 
 pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
