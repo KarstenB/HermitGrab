@@ -1,60 +1,76 @@
 # HermitGrab
 
-A modern, user-friendly dotfile manager built with Rust. HermitGrab helps you manage, install, and sync your dotfiles and developer tools across multiple machines.
+A powerful, tag-based dotfile manager written in Rust. Effortlessly manage configurations, install tools, and sync your entire development environment across any machine.
 
-## Automatic Tag Detection
+## Features
 
-HermitGrab automatically detects and adds the following tags based on your environment:
-
-- **Hostname:** The current machine's hostname (e.g., `desktop-a`, `laptop-b`)
-- **Architecture:** The CPU architecture in Docker style (e.g., `amd64`, `arm64`)
-- **OS:** The operating system (e.g., `macos`, `ubuntu`, `debian`, `windows`)
-- **OS Version:** The numeric OS version (e.g., `24.04`, `12.7.1`)
-- **OS Version Nickname:** The OS version codename or nickname (e.g., `bookworm`, `Noble Numbat`, `Sonoma`)
-
-These tags are available for use in your  `hermit.toml` files to conditionally enable or disable configurations and installations.
-
-## MVP Usage
-
-### 1. Clone your dotfiles repository
-
-```sh
-hermitgrab init https://github.com/yourusername/your-dotfiles-repo.git
-```
-
-### 2. Apply configuration (link/copy dotfiles, install fish & starship)
-
-```sh
-hermitgrab apply
-```
-
-### 3. Check status
-
-```sh
-hermitgrab status
-```
+- **Tag-Based System:** Use tags to conditionally apply configurations. Set up profiles for `work`, `personal`, or specific machines with ease.
+- **Tool Installation:** Go beyond dotfiles. Install your favorite CLIs and applications using the same declarative `hermit.toml` file.
+- **Universal Binary Installer:** Leverage the built-in `ubi` to fetch and install binaries from URLs, ensuring cross-platform consistency.
+- **Automatic Discovery:** Find and use community-managed dotfile repos effortlessly via GitHub and GitLab topics.
+- **File Patching:** Atomically patch existing files. Perfect for modifying `settings.json` in VSCode or other JSON configs.
+- **Single Static Binary:** Written in Rust for speed and reliability. No dependencies, no runtime, no hassle. Just one binary.
 
 ## Example `hermit.toml`
 
-```yaml
-files:
-  - source: fish/config.fish
-    target: ~/.config/fish/config.fish
-    link: soft
-  - source: starship/starship.toml
-    target: ~/.config/starship.toml
-    link: soft
-install:
-  - fish
-  - starship
+```toml
+# This configuration file provides the fish shell
+provides = ["fish"]
+# It requires a unix-like OS and will not run if zsh is a tag
+requires = ["+os_family=unix", "-zsh"]
+
+# Soft-link the main fish config, with a backup strategy
+[[file]]
+source = "config.fish"
+target = "~/.config/fish/config.fish"
+fallback = "BackupOverwrite"
+
+# Conditionally install aliases only when 'ripgrep' tag is active
+[[file]]
+source = "functions/egrep.fish"
+target = "~/.config/fish/functions/egrep.fish"
+requires = ["+ripgrep"]
+
+# Patch VSCode settings in a DevContainer
+[[patch]]
+type = "JsonMerge"
+source = "vscode_settings.json"
+target = "~/.vscode-server/data/Machine/settings.json"
+requires = ["user=vscode"]
+
+[[install]]
+name = "fish"
+check_cmd = "command -v fish"
+source = "ubi"
+requires = ["+arch=aarch64", "+os=linux"]
+
+[install.variables]
+exe = "fish"
+url = "https://..."
+
+# Profiles are collections of tags to activate
+[profiles]
+default = ["fish"]
+karsten = ["bashrc", "bat", "fish", "ripgrep"]
+work-rust = ["fish", "git", "rust", "starship"]
 ```
 
-## Requirements
-- Rust (for building HermitGrab)
-- git (for cloning dotfiles)
+## Installation
 
-## Roadmap
-- TUI mode
-- Tagging and detectors
-- Smart-patching
-- More package manager support
+### Install from your domain (Recommended)
+
+```sh
+bash -c "$(curl -fsSL https://hermitgrab.app/install.sh)"
+```
+
+### Or, build from source with Cargo
+
+```sh
+cargo install --git https://github.com/KarstenB/hermitgrab.git hermitgrab
+```
+
+## License
+
+Released under the GPL-3.0 License.
+
+Copyright © 2024 - The HermitGrab Developers
