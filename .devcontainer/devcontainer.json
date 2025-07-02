@@ -1,30 +1,4 @@
 {
-	"name": "Rust",
-	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bookworm",
-	"mounts": [
-		// My primary driver is a MacBook and bind mounts are quite slow, so target is a volume
-		{
-			"source": "${localWorkspaceFolderBasename}-target-${devcontainerId}",
-			"target": "${containerWorkspaceFolder}/target",
-			"type": "volume"
-		}
-	],
-
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker": {
-			"moby": false,
-			"dockerDashComposeVersion": "none",
-			"installDockerComposeSwitch": false
-		},
-		"./cross-rust": {}
-	},
-	"postCreateCommand": "sudo chown -R $(id -u):$(id -g) ${containerWorkspaceFolder}/target",
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-vscode.live-server"
-			]
-		}
-	}
+	"name": "Build Hermitgrab DevContainer",
+    "image" :"ghcr.io/karstenb/hermitgrab-devcontainer"
 }
