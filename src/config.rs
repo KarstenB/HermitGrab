@@ -11,6 +11,7 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Weak;
 use toml_edit::DocumentMut;
 
 use crate::detector::detect_builtin_tags;
@@ -185,7 +186,7 @@ pub struct HermitConfig {
     #[serde(skip)]
     path: PathBuf,
     #[serde(skip)]
-    global_cfg: Arc<GlobalConfig>,
+    global_cfg: Weak<GlobalConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub provides: BTreeSet<Tag>,
@@ -194,7 +195,7 @@ pub struct HermitConfig {
     pub file: Vec<LinkConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub patch: Vec<PatchfileEntry>,
+    pub patch: Vec<PatchConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub install: Vec<InstallConfig>,
@@ -210,7 +211,7 @@ pub struct HermitConfig {
 }
 
 impl HermitConfig {
-    pub fn create_new(path: &Path, global_cfg: Arc<GlobalConfig>) -> Self {
+    pub fn create_new(path: &Path, global_cfg: Weak<GlobalConfig>) -> Self {
         HermitConfig {
             path: path.to_path_buf(),
             global_cfg,
@@ -222,8 +223,10 @@ impl HermitConfig {
         self.path.as_path()
     }
 
-    pub fn global_config(&self) -> &Arc<GlobalConfig> {
-        &self.global_cfg
+    pub fn global_config(&self) -> Arc<GlobalConfig> {
+        self.global_cfg
+            .upgrade()
+            .expect("Global config should be set before using HermitConfig")
     }
 
     pub fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigError> {
@@ -239,7 +242,7 @@ impl HermitConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkType {
     #[default]
@@ -284,7 +287,7 @@ impl Display for LinkType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub enum PatchType {
     JsonMerge,
     JsonPatch,
@@ -300,7 +303,7 @@ impl Display for PatchType {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PatchfileEntry {
+pub struct PatchConfig {
     pub source: PathBuf,
     pub target: PathBuf,
     #[serde(rename = "type")]
@@ -309,16 +312,20 @@ pub struct PatchfileEntry {
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
 }
-impl PatchfileEntry {
+impl PatchConfig {
     pub fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
         for tag in cfg.provides.iter() {
             requires.insert(RequireTag::Positive(tag.0.clone()));
         }
-        for tag in &cfg.requires {
-            requires.insert(tag.clone());
-        }
+        requires.extend(cfg.requires.iter().cloned());
         requires
+    }
+
+    pub fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
+        let mut provides = BTreeSet::new();
+        provides.extend(cfg.provides.iter().cloned());
+        provides
     }
 }
 
@@ -347,7 +354,7 @@ fn is_default_link(link_type: &LinkType) -> bool {
     matches!(link_type, LinkType::Soft)
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum FallbackOperation {
     #[default]
     Abort,
@@ -456,30 +463,26 @@ impl Display for FileStatus {
 }
 
 impl LinkConfig {
-    pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
+    pub fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
         for tag in cfg.provides.iter() {
             requires.insert(RequireTag::Positive(tag.0.clone()));
         }
-        for tag in &cfg.requires {
-            requires.insert(tag.clone());
-        }
+        requires.extend(cfg.requires.iter().cloned());
         requires
     }
 
-    pub(crate) fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
+    pub fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
         let mut provides = self.provides.clone();
-        for tag in cfg.provides.iter() {
-            provides.insert(tag.clone());
-        }
+        provides.extend(cfg.provides.iter().cloned());
         provides
     }
 
-    pub(crate) fn check(&self, cfg: &HermitConfig, quick: bool) -> FileStatus {
+    pub fn check(&self, cfg: &HermitConfig, quick: bool) -> FileStatus {
         let cfg_dir = cfg.directory();
         let src_file = cfg_dir.join(&self.source);
         let src_file = src_file.canonicalize().unwrap_or(src_file);
-        let actual_dst = cfg.global_cfg.expand_directory(&self.target);
+        let actual_dst = cfg.global_config().expand_directory(&self.target);
         match actual_dst.try_exists() {
             Ok(exists) => {
                 if !exists {
@@ -556,22 +559,18 @@ pub struct InstallConfig {
 }
 
 impl InstallConfig {
-    pub(crate) fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
+    pub fn get_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires.clone();
         for tag in cfg.provides.iter() {
             requires.insert(RequireTag::Positive(tag.0.clone()));
         }
-        for tag in &cfg.requires {
-            requires.insert(tag.clone());
-        }
+        requires.extend(cfg.requires.iter().cloned());
         requires
     }
 
-    pub(crate) fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
+    pub fn get_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
         let mut provides = self.provides.clone();
-        for tag in cfg.provides.iter() {
-            provides.insert(tag.clone());
-        }
+        provides.extend(cfg.provides.iter().cloned());
         provides
     }
 }
@@ -587,46 +586,73 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Self, ConfigError> {
-        let mut subconfigs = BTreeMap::new();
-        let mut all_profiles = BTreeMap::new();
-        let mut all_provided_tags = BTreeSet::new();
-        let mut all_sources = BTreeMap::new();
-        for path in paths {
-            let config = load_hermit_config(path)?;
-            for tag in &config.provides {
-                all_provided_tags.insert(tag.clone());
-            }
-            for (k, v) in &config.sources {
-                if all_sources.contains_key(&k.to_lowercase()) {
-                    return Err(ConfigError::DuplicateSource(k.to_string(), config.path));
+    pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Arc<Self>, ConfigError> {
+        let mut errors = Vec::new();
+        Ok(Arc::new_cyclic(|global_config: &Weak<GlobalConfig>| {
+            let mut result = GlobalConfig {
+                root_dir: root_dir.to_path_buf(),
+                ..Default::default()
+            };
+            for path in paths {
+                log::debug!("Loading config from path: {}", path.display());
+                let config = load_hermit_config(path, global_config.clone());
+                let config = match config {
+                    Ok(cfg) => cfg,
+                    Err(e) => {
+                        crate::error!("Failed to load config from path: {}: {}", path.display(), e);
+                        errors.push(e);
+                        continue;
+                    }
+                };
+                for tag in &config.provides {
+                    log::debug!("Adding provided tag: {}", tag);
+                    result.all_provided_tags.insert(tag.clone());
                 }
-                all_sources.insert(k.to_lowercase(), v.clone());
-            }
-            // Collect profiles (error on duplicate, lower-case, dedup tags)
-            for (profile, tags) in &config.profiles {
-                let profile_lc = profile.to_lowercase();
-                if all_profiles.contains_key(&profile_lc) {
-                    return Err(ConfigError::DuplicateProfile(
-                        profile_lc.clone(),
-                        config.path.clone(),
-                    ));
+                for (k, v) in &config.sources {
+                    if result.all_sources.contains_key(&k.to_lowercase()) {
+                        crate::error!(
+                            "Duplicate source key '{}' in config file: {}",
+                            k,
+                            config.path.display()
+                        );
+                        errors.push(ConfigError::DuplicateSource(
+                            k.to_string(),
+                            config.path.clone(),
+                        ));
+                        continue;
+                    }
+                    log::debug!("Adding source {}: {}", k, v);
+                    result.all_sources.insert(k.to_lowercase(), v.clone());
                 }
-                all_profiles.insert(profile_lc, tags.clone());
+                // Collect profiles (error on duplicate, lower-case, dedup tags)
+                for (profile, tags) in &config.profiles {
+                    let profile_lc = profile.to_lowercase();
+                    log::debug!("Adding profile {}: {:?}", profile_lc, tags);
+                    if result.all_profiles.contains_key(&profile_lc) {
+                        crate::error!(
+                            "Duplicate profile '{}' in config file: {}",
+                            profile_lc,
+                            config.path.display()
+                        );
+                        errors.push(ConfigError::DuplicateProfile(
+                            profile_lc.clone(),
+                            config.path.clone(),
+                        ));
+                    }
+                    result.all_profiles.insert(profile_lc, tags.clone());
+                }
+                let relative_path = path.strip_prefix(root_dir).unwrap_or(path);
+                let relative_path_str = relative_path.to_string_lossy().to_string();
+                result.subconfigs.insert(relative_path_str, config);
             }
-            let relative_path = path.strip_prefix(root_dir).unwrap_or(path);
-            let relative_path_str = relative_path.to_string_lossy().to_string();
-            subconfigs.insert(relative_path_str, config);
-        }
-        let all_detected_tags = detect_builtin_tags();
-        Ok(GlobalConfig {
-            root_dir: root_dir.to_path_buf(),
-            subconfigs,
-            all_profiles,
-            all_provided_tags,
-            all_detected_tags,
-            all_sources,
-        })
+            result.all_detected_tags = detect_builtin_tags();
+            log::debug!("Detected tags: {:?}", result.all_detected_tags);
+            result
+        }))
+    }
+
+    pub fn hermit_dir(&self) -> &Path {
+        &self.root_dir
     }
 
     pub fn get_active_tags(
@@ -740,12 +766,16 @@ impl GlobalConfig {
     }
 }
 
-pub fn load_hermit_config<P: AsRef<Path>>(path: P) -> Result<HermitConfig, ConfigError> {
+pub fn load_hermit_config<P: AsRef<Path>>(
+    path: P,
+    global_config: Weak<GlobalConfig>,
+) -> Result<HermitConfig, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
         .map_err(|e| ConfigError::IoError(e, path.as_ref().to_path_buf()))?;
     let mut config: HermitConfig = toml::from_str(&content)
         .map_err(|e| ConfigError::DeserializeTomlError(e, path.as_ref().to_path_buf()))?;
     config.path = path.as_ref().to_path_buf();
+    config.global_cfg = global_config;
     Ok(config)
 }
 

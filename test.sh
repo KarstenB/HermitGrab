@@ -2,8 +2,8 @@
 set -e
 GIT_ROOT=$(git rev-parse --show-toplevel)
 cd "$GIT_ROOT"
-cargo build --release
-HG="$GIT_ROOT/target/release/hermitgrab"
+cargo build
+HG="$GIT_ROOT/target/debug/hermitgrab"
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
@@ -24,6 +24,7 @@ TEMP_DIR=$(mktemp -d)
 cd "$TEMP_DIR"
 echo "Temporary directory created at $TEMP_DIR, calling init"
 export HOME="$TEMP_DIR"
+$HG --version
 $HG init create
 echo "Creating config directory"
 echo "Test file content" > "$TEMP_DIR/testfile.txt"

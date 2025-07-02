@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use git2::{Cred, RemoteCallbacks, Repository};
 use oauth2::http::header::ACCEPT;
@@ -5,12 +7,16 @@ use octocrab::Octocrab;
 use secrecy::{ExposeSecret, SecretBox};
 
 use crate::{
-    common_cli::success, hermit_dir, hermitgrab_error::DiscoverError, hermitgrab_info, info,
-    prompt, success, warn,
+    common_cli::success, config::GlobalConfig, hermitgrab_error::DiscoverError, hermitgrab_info,
+    info, prompt, success, warn,
 };
 
-pub fn clone_or_update_repo(repo: String, token: Option<&str>) -> Result<(), DiscoverError> {
-    let hermit_dir = hermit_dir();
+pub fn clone_or_update_repo(
+    repo: String,
+    token: Option<&str>,
+    global_config: &Arc<GlobalConfig>,
+) -> Result<(), DiscoverError> {
+    let hermit_dir = global_config.hermit_dir();
     let mut callbacks = RemoteCallbacks::new();
     if let Some(token) = token {
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
@@ -23,7 +29,7 @@ pub fn clone_or_update_repo(repo: String, token: Option<&str>) -> Result<(), Dis
     fetch_opts.remote_callbacks(callbacks);
     if hermit_dir.exists() {
         info!("Updating existing repo at {}", hermit_dir.display());
-        let repo = Repository::open(&hermit_dir)?;
+        let repo = Repository::open(hermit_dir)?;
         let mut remote = repo.find_remote("origin")?;
         remote.fetch(&["main"], Some(&mut fetch_opts), None)?;
     } else {
@@ -32,7 +38,7 @@ pub fn clone_or_update_repo(repo: String, token: Option<&str>) -> Result<(), Dis
         builder
             .fetch_options(fetch_opts)
             .branch("main")
-            .clone(&repo, &hermit_dir)?;
+            .clone(&repo, hermit_dir)?;
         success!("Cloned repository to {}", hermit_dir.display());
     }
     Ok(())
@@ -41,6 +47,7 @@ pub fn clone_or_update_repo(repo: String, token: Option<&str>) -> Result<(), Dis
 pub async fn discover_repo_with_github(
     create: bool,
     token: Option<String>,
+    global_config: &Arc<GlobalConfig>,
 ) -> Result<(), DiscoverError> {
     hermitgrab_info!("Discovering dotfiles repository...");
     let (octocrab, token) = if let Some(token) = token {
@@ -54,7 +61,7 @@ pub async fn discover_repo_with_github(
     if found_repos.is_empty() {
         if create {
             hermitgrab_info!("No HermitGrab repo found, creating new repository...");
-            github_create_repo(octocrab, &token).await?;
+            github_create_repo(octocrab, &token, global_config).await?;
         } else {
             warn!("No HermitGrab repo found. Use --create to create one.");
         }
@@ -80,7 +87,7 @@ pub async fn discover_repo_with_github(
     };
 
     if let Some(clone_url) = &selected_repo.clone_url {
-        clone_or_update_repo(clone_url.to_string(), Some(&token))?;
+        clone_or_update_repo(clone_url.to_string(), Some(&token), global_config)?;
     } else {
         return Err(DiscoverError::NoGitCloneUrl(selected_repo.name.to_string()));
     }
@@ -113,7 +120,11 @@ async fn github_find_hermitgrab_topic_repos(
     Ok(found_repos)
 }
 
-async fn github_create_repo(octocrab: Octocrab, token: &str) -> Result<(), DiscoverError> {
+async fn github_create_repo(
+    octocrab: Octocrab,
+    token: &str,
+    global_config: &Arc<GlobalConfig>,
+) -> Result<(), DiscoverError> {
     let repo_name = "dotfiles";
     let repo_create = serde_json::json!({
         "name": repo_name,
@@ -126,7 +137,7 @@ async fn github_create_repo(octocrab: Octocrab, token: &str) -> Result<(), Disco
     success!("Created repo: {:?}", repo.full_name);
     if let Some(clone_url) = &repo.clone_url {
         hermitgrab_info!("Cloning {}...", clone_url);
-        clone_or_update_repo(clone_url.to_string(), Some(token))?;
+        clone_or_update_repo(clone_url.to_string(), Some(token), global_config)?;
     } else {
         return Err(DiscoverError::NoGitCloneUrl(repo_name.to_string()));
     };
@@ -152,31 +163,40 @@ async fn github_device_flow_auth() -> Result<(Octocrab, String), DiscoverError> 
     Ok((Octocrab::builder().oauth(auth).build()?, token))
 }
 
-pub fn create_local_repo() -> Result<(), DiscoverError> {
-    hermitgrab_info!("Creating empty local dotfiles repo (not yet implemented)");
-    let hermit_dir = hermit_dir();
+pub fn create_local_repo(global_config: &Arc<GlobalConfig>) -> Result<(), DiscoverError> {
+    let hermit_dir = global_config.hermit_dir();
     if hermit_dir.exists() {
         warn!(
             "Dotfiles directory already exists at {}",
             hermit_dir.display()
         );
-        return Err(DiscoverError::RepoAlreadyExists(hermit_dir));
+        return Err(DiscoverError::RepoAlreadyExists(
+            global_config.hermit_dir().into(),
+        ));
     }
-    std::fs::create_dir_all(&hermit_dir)?;
-    Repository::init(&hermit_dir)?;
+    hermitgrab_info!(
+        "Creating empty local dotfiles repo in {}",
+        hermit_dir.display()
+    );
+    if let Some(hermit_parent) = hermit_dir.parent() {
+        if !hermit_parent.exists() {
+            std::fs::create_dir_all(hermit_parent)?;
+        }
+    }
+    Repository::init(hermit_dir)?;
     success!("Initialized empty repository at {}", hermit_dir.display());
     info!("You can now add your dotfiles to this directory and commit them.");
     Ok(())
 }
 
-pub(crate) async fn discover_repo_with_gitlab(
+pub async fn discover_repo_with_gitlab(
     _create: bool,
     _token: Option<String>,
 ) -> Result<(), DiscoverError> {
     todo!()
 }
 
-pub(crate) async fn discover_repo_with_azure_devops(
+pub async fn discover_repo_with_azure_devops(
     _create: bool,
     _token: Option<String>,
 ) -> Result<(), DiscoverError> {

@@ -1,5 +1,7 @@
 use std::{io::Write, process::Output, sync::Mutex};
 
+use derivative::Derivative;
+
 use crate::{
     HermitConfig, InstallConfig, RequireTag,
     action::{Action, ActionOutput},
@@ -7,8 +9,9 @@ use crate::{
     hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
+#[derive(Derivative)]
+#[derivative(Debug, Hash, PartialEq)]
 pub struct InstallAction {
-    id: String,
     name: String,
     requires: Vec<RequireTag>,
     provides: Vec<Tag>,
@@ -16,27 +19,28 @@ pub struct InstallAction {
     pre_install_cmd: Option<String>,
     post_install_cmd: Option<String>,
     install_cmd: String,
+    #[derivative(Debug = "ignore")]
+    #[derivative(Hash = "ignore")]
+    #[derivative(PartialEq = "ignore")]
     output: Mutex<Option<ActionOutput>>,
 }
 impl InstallAction {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        id: String,
-        install_entry: &InstallConfig,
-        cfg: &HermitConfig,
-    ) -> Result<Self, ConfigError> {
+    pub fn new(install_entry: &InstallConfig, cfg: &HermitConfig) -> Result<Self, ConfigError> {
         let lc_src = install_entry.source.to_lowercase();
-        let install_cmd = cfg
-            .sources
-            .get(&lc_src)
-            .or(cfg.global_config().all_sources.get(&lc_src));
+        let global_config = cfg.global_config();
+        let install_cmd = global_config.all_sources.get(&lc_src);
         let Some(install_cmd) = install_cmd else {
+            log::debug!(
+                "Install source '{}' not found in global config sources {:?}",
+                lc_src,
+                global_config.all_sources.keys()
+            );
             return Err(ConfigError::InstallSourceNotFound(lc_src.clone()));
         };
         let mut variables = install_entry.variables.clone();
         variables.insert(
             "hermit_root_dir".to_string(),
-            cfg.global_config().root_dir.to_string_lossy().to_string(),
+            global_config.root_dir.to_string_lossy().to_string(),
         );
         variables.insert(
             "hermit_this_dir".to_string(),
@@ -50,23 +54,22 @@ impl InstallAction {
         let pre_install_cmd = install_entry
             .pre_install_cmd
             .as_deref()
-            .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
+            .map(|cmd| global_config.prepare_cmd(cmd, &variables))
             .transpose()?;
         let post_install_cmd = install_entry
             .post_install_cmd
             .as_deref()
-            .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
+            .map(|cmd| global_config.prepare_cmd(cmd, &variables))
             .transpose()?;
         let check_cmd = install_entry
             .check_cmd
             .as_deref()
-            .map(|cmd| cfg.global_config().prepare_cmd(&cmd, &variables))
+            .map(|cmd| global_config.prepare_cmd(cmd, &variables))
             .transpose()?;
-        let install_cmd = cfg.global_config().prepare_cmd(&install_cmd, &variables)?;
+        let install_cmd = global_config.prepare_cmd(install_cmd, &variables)?;
         let requires = install_entry.get_requires(cfg);
         let provides = install_entry.get_provides(cfg);
         Ok(Self {
-            id,
             name: install_entry.name.clone(),
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
@@ -135,9 +138,6 @@ impl Action for InstallAction {
     }
     fn provides(&self) -> &[Tag] {
         &self.provides
-    }
-    fn id(&self) -> String {
-        self.id.clone()
     }
     fn execute(&self) -> Result<(), ActionError> {
         if !self.install_required()? {

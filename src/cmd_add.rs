@@ -3,6 +3,7 @@ use std::{
     collections::BTreeSet,
     iter::FromIterator,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 
@@ -10,21 +11,22 @@ use crate::{
     HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice,
     common_cli::{hint, prompt},
     config::{
-        CONF_FILE_NAME, FallbackOperation, Source::CommandLine, Tag, load_hermit_config_editable,
+        CONF_FILE_NAME, FallbackOperation, GlobalConfig, Source::CommandLine, Tag,
+        load_hermit_config_editable,
     },
     error,
     file_ops::copy,
-    hermit_dir,
     hermitgrab_error::AddError,
     info, success, user_home,
 };
 
-pub(crate) fn add_config(
-    config_dir: &PathBuf,
+pub fn add_config(
+    config_dir: &Path,
     provided_tags: &[Tag],
     required_tags: &[RequireTag],
     files: &[LinkConfig],
     installs: &[InstallConfig],
+    global_config: &Arc<GlobalConfig>,
 ) -> Result<(), AddError> {
     let config_dir = if config_dir.ends_with(CONF_FILE_NAME) {
         config_dir
@@ -32,12 +34,12 @@ pub(crate) fn add_config(
             .expect("Failed to get parent directory")
             .to_path_buf()
     } else {
-        config_dir.clone()
+        config_dir.to_path_buf()
     };
     let config_dir = if config_dir.is_absolute() {
         config_dir.clone()
     } else {
-        hermit_dir().join(config_dir)
+        global_config.hermit_dir().join(config_dir)
     };
     let config_file = config_dir.join(CONF_FILE_NAME);
     if config_file.exists() {
@@ -75,7 +77,7 @@ fn prompt_for_provides() -> Result<Vec<Tag>, AddError> {
         .collect())
 }
 
-pub(crate) fn add_link(
+pub fn add_link(
     config_dir: &Option<PathBuf>,
     source: &Path,
     link_type: &LinkType,
@@ -83,13 +85,14 @@ pub(crate) fn add_link(
     required_tags: &[RequireTag],
     provided_tags: &[Tag],
     fallback: &FallbackOperation,
+    global_config: &Arc<GlobalConfig>,
 ) -> Result<(), AddError> {
     let target_dir = if let Some(target_dir) = config_dir {
         let new_target = PathBuf::from(target_dir);
         if new_target.is_absolute() {
             new_target
         } else {
-            hermit_dir().join(new_target)
+            global_config.hermit_dir().join(new_target)
         }
     } else {
         let absolute_source = source.canonicalize().unwrap_or(source.to_path_buf());
@@ -123,18 +126,20 @@ pub(crate) fn add_link(
                 .and_then(|p| p.file_name().and_then(|f| f.to_str()))
                 .unwrap_or("")
         };
-        let deep_config_file = hermit_dir()
+        let deep_config_file = global_config
+            .hermit_dir()
             .join(relative_source.parent().unwrap_or(relative_source))
             .join(CONF_FILE_NAME);
         let deep_config_display_path = deep_config_file
-            .strip_prefix(hermit_dir())
+            .strip_prefix(global_config.hermit_dir())
             .unwrap_or(&deep_config_file)
             .display();
-        let simple_config_file = hermit_dir()
+        let simple_config_file = global_config
+            .hermit_dir()
             .join(last_segment_from_absolute)
             .join(CONF_FILE_NAME);
         let simple_config_display_path = simple_config_file
-            .strip_prefix(hermit_dir())
+            .strip_prefix(global_config.hermit_dir())
             .unwrap_or(&simple_config_file)
             .display();
         if simple_config_file.exists() {
@@ -166,7 +171,7 @@ pub(crate) fn add_link(
                 let custom_dir = prompt("Enter custom directory path: ")?;
                 PathBuf::from(custom_dir)
             }
-            "4" => hermit_dir(),
+            "4" => global_config.hermit_dir().into(),
             _ => return Err(AddError::InvalidChoice),
         }
     };
@@ -201,7 +206,14 @@ pub(crate) fn add_link(
     if config_file.exists() {
         insert_into_existing(&config_file, &file_entry)?;
     } else {
-        add_config(&target_dir, provided_tags, &[], &[file_entry], &[])?;
+        add_config(
+            &target_dir,
+            provided_tags,
+            &[],
+            &[file_entry],
+            &[],
+            global_config,
+        )?;
     }
     copy(source, target_dir.join(source_filename).as_path())?;
     crate::success!("Added new link to {config_file:?}");
@@ -263,8 +275,12 @@ fn to_table(file_entry: &LinkConfig) -> Result<toml_edit::Table, AddError> {
     Ok(table)
 }
 
-pub(crate) fn add_profile(name: &str, tags: &[Tag]) -> Result<(), AddError> {
-    let config_file = hermit_dir().join(CONF_FILE_NAME);
+pub fn add_profile(
+    name: &str,
+    tags: &[Tag],
+    global_config: &Arc<GlobalConfig>,
+) -> Result<(), AddError> {
+    let config_file = global_config.hermit_dir().join(CONF_FILE_NAME);
     info!("Updating profiles in {config_file:?}");
     let mut config = load_hermit_config_editable(&config_file)?;
     let profiles = config["profiles"].or_insert(Item::Table(Table::new()));

@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::{config::GlobalConfig, error, hermitgrab_error::StatusError, info, success};
 
-pub(crate) fn get_status(cfg: &GlobalConfig) -> Result<(), StatusError> {
+pub fn get_status(cfg: &Arc<GlobalConfig>) -> Result<(), StatusError> {
     for (dir, cfg) in &cfg.subconfigs {
         info!("Checking {dir}");
         for file in &cfg.file {

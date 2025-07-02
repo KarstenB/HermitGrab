@@ -30,10 +30,26 @@ use std::path::PathBuf;
 pub use std::sync::Arc;
 use std::sync::OnceLock;
 
+fn long_version() -> &'static str {
+    static VERSION: OnceLock<String> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        format!(
+            "{} (commit: {} epoch: {})",
+            env!("CARGO_PKG_VERSION"),
+            option_env!("CARGO_MAKE_GIT_HEAD_LAST_COMMIT_HASH_PREFIX").unwrap_or("<unknown>"),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        )
+    })
+}
+
 #[derive(Parser)]
 #[command(name = "hermitgrab")]
+#[command(version, long_version = long_version())]
 #[command(about = "A modern dotfile manager", long_about = None)]
-struct Cli {
+pub struct Cli {
     #[command(subcommand)]
     command: Commands,
     /// Run in interactive TUI mode
@@ -231,16 +247,10 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
     );
     dotfiles_dir
 }
-pub fn hermit_dir() -> PathBuf {
-    SEARCH_ROOT
-        .get()
-        .expect("Hermit directory not set")
-        .to_path_buf()
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // simple_logger::init_with_env().unwrap();
+    simple_logger::init_with_env().unwrap();
     let cli = Cli::parse();
     let search_root = SEARCH_ROOT.get_or_init(|| init_hermit_dir(&cli.hermit_dir));
     let yaml_files = find_hermit_files(search_root);
@@ -249,22 +259,22 @@ async fn main() -> Result<()> {
         Commands::Init { init_command } => match init_command {
             InitCommand::Clone { repo } => {
                 let pat = std::env::var("HERMITGRAB_GITHUB_TOKEN");
-                crate::cmd_init::clone_or_update_repo(repo, pat.ok().as_deref())?;
+                crate::cmd_init::clone_or_update_repo(repo, pat.ok().as_deref(), &global_config)?;
             }
             InitCommand::Discover { create, provider } => {
-                let hermit_dir = hermit_dir();
-                if hermit_dir.exists() {
+                if search_root.exists() {
                     info!(
                         "Dotfiles directory already exists at {}",
-                        hermit_dir.display()
+                        search_root.display()
                     );
-                    Repository::open(&hermit_dir)?;
+                    Repository::open(search_root)?;
                     info!("Repository already initialized, skipping discovery.");
                     return Ok(());
                 }
                 match provider {
                     Provider::GitHub { token } => {
-                        crate::cmd_init::discover_repo_with_github(create, token).await?;
+                        crate::cmd_init::discover_repo_with_github(create, token, &global_config)
+                            .await?;
                     }
                     Provider::GitLab { token } => {
                         crate::cmd_init::discover_repo_with_gitlab(create, token).await?;
@@ -275,7 +285,7 @@ async fn main() -> Result<()> {
                 }
             }
             InitCommand::Create => {
-                crate::cmd_init::create_local_repo()?;
+                crate::cmd_init::create_local_repo(&global_config)?;
             }
         },
         Commands::Add { add_command } => match add_command {
@@ -284,7 +294,7 @@ async fn main() -> Result<()> {
                 ref tags,
                 ref required_tags,
             } => {
-                cmd_add::add_config(config_dir, tags, required_tags, &[], &[])?;
+                cmd_add::add_config(config_dir, tags, required_tags, &[], &[], &global_config)?;
             }
             AddCommand::Link {
                 ref config_dir,
@@ -303,10 +313,11 @@ async fn main() -> Result<()> {
                     required_tags,
                     provided_tags,
                     fallback,
+                    &global_config,
                 )?;
             }
             AddCommand::Profile { ref name, ref tags } => {
-                cmd_add::add_profile(name, tags)?;
+                cmd_add::add_profile(name, tags, &global_config)?;
             }
         },
         Commands::Apply {

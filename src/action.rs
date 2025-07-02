@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+use enum_dispatch::enum_dispatch;
 
 use crate::RequireTag;
 use crate::config::Tag;
@@ -62,7 +65,8 @@ impl IntoIterator for ActionOutput {
         }))
     }
 }
-pub trait Action: Send + Sync {
+#[enum_dispatch]
+pub trait Action: Send + Sync + Hash {
     fn short_description(&self) -> String;
     fn long_description(&self) -> String;
     fn get_output(&self) -> Option<ActionOutput> {
@@ -73,8 +77,19 @@ pub trait Action: Send + Sync {
     fn provides_tag(&self, tag: &Tag) -> bool {
         self.provides().iter().any(|t| t == tag)
     }
-    fn id(&self) -> String; // Unique identifier for sorting/deps
+    fn id(&self) -> String {
+        let mut hash = DefaultHasher::new();
+        self.hash(&mut hash);
+        format!("{}:{}", std::any::type_name::<Self>(), hash.finish())
+    }
     fn execute(&self) -> Result<(), ActionError>;
 }
 
-pub type ArcAction = std::sync::Arc<dyn Action>;
+#[enum_dispatch(Action)]
+#[derive(Debug, Hash, PartialEq)]
+pub enum Actions {
+    Install(install::InstallAction),
+    Link(link::LinkAction),
+    Patch(patch::PatchAction),
+}
+pub type ArcAction = std::sync::Arc<Actions>;

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crossterm::style::{Attribute, Color, Stylize};
 
 use crate::Cli;
-use crate::action::ArcAction;
+use crate::action::{Action, ArcAction};
 use crate::common_cli::success;
 use crate::common_cli::{stderr, stdout};
 use crate::config::GlobalConfig;
@@ -15,7 +15,7 @@ use crate::{error, hermitgrab_info};
 #[allow(unused_imports)]
 use crate::common_cli::step;
 
-pub(crate) fn apply_with_tags(
+pub fn apply_with_tags(
     global_config: &Arc<GlobalConfig>,
     cli: &Cli,
     tags: &[String],

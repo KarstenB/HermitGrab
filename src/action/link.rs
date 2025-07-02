@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use derivative::Derivative;
+
 use crate::{
     HermitConfig, LinkConfig, LinkType, RequireTag,
     action::Action,
@@ -8,8 +10,10 @@ use crate::{
     hermitgrab_error::{ActionError, LinkActionError},
     user_home,
 };
+
+#[derive(Derivative)]
+#[derivative(Debug, Hash, PartialEq)]
 pub struct LinkAction {
-    id: String,
     rel_src: String,
     rel_dst: String,
     src: PathBuf,
@@ -20,8 +24,8 @@ pub struct LinkAction {
     fallback: FallbackOperation,
 }
 impl LinkAction {
-    pub(crate) fn new(id: String, link_config: &LinkConfig, cfg: &HermitConfig) -> Self {
-        let abs_src = cfg.directory().join(&link_config.source);
+    pub fn new(link_config: &LinkConfig, cfg: &HermitConfig) -> Self {
+        let src = cfg.directory().join(&link_config.source);
         let rel_src = link_config
             .source
             .strip_prefix(cfg.directory())
@@ -37,15 +41,14 @@ impl LinkAction {
         let provides = link_config.get_provides(cfg);
         let requires = link_config.get_requires(cfg);
         Self {
-            id,
-            src: abs_src,
+            src,
             rel_src,
             dst,
             rel_dst,
-            link_type: link_config.link.clone(),
+            link_type: link_config.link,
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
-            fallback: link_config.fallback.clone(),
+            fallback: link_config.fallback,
         }
     }
 }
@@ -72,9 +75,6 @@ impl Action for LinkAction {
     }
     fn provides(&self) -> &[Tag] {
         &self.provides
-    }
-    fn id(&self) -> String {
-        self.id.clone()
     }
     fn execute(&self) -> Result<(), ActionError> {
         link_files(&self.src, &self.dst, &self.link_type, &self.fallback)

@@ -1,20 +1,19 @@
-use std::{
-    collections::BTreeSet,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
+use derivative::Derivative;
 use jsonc_parser::ParseOptions;
 
 use crate::{
     HermitConfig, RequireTag,
     action::{Action, ActionOutput},
-    config::{PatchType, Tag},
+    config::{PatchConfig, PatchType, Tag},
     hermitgrab_error::{ActionError, PatchActionError},
     user_home,
 };
 
+#[derive(Derivative)]
+#[derivative(Debug, Hash, PartialEq)]
 pub struct PatchAction {
-    id: String,
     rel_src: String,
     rel_dst: String,
     src: PathBuf,
@@ -25,35 +24,23 @@ pub struct PatchAction {
 }
 
 impl PatchAction {
-    pub(crate) fn new(
-        id: String,
-        config_dir: &Path,
-        src: PathBuf,
-        dst: PathBuf,
-        requires: BTreeSet<RequireTag>,
-        provides: BTreeSet<Tag>,
-        patch_type: PatchType,
-        cfg: &HermitConfig,
-    ) -> Self {
-        let rel_src = src
-            .strip_prefix(config_dir)
-            .unwrap_or(&src)
-            .to_string_lossy()
-            .to_string();
-        let dst = cfg.global_config().expand_directory(&dst);
+    pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Self {
+        let src = cfg.directory().join(&patch.source);
+        let rel_src = patch.source.to_string_lossy().to_string();
+        let dst = cfg.global_config().expand_directory(&patch.target);
         let rel_dst = dst
             .strip_prefix(user_home())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
-
+        let provides = patch.get_provides(cfg);
+        let requires = patch.get_requires(cfg);
         Self {
-            id,
             src,
             rel_src,
             dst,
             rel_dst,
-            patch_type,
+            patch_type: patch.patch_type.clone(),
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
         }
@@ -79,9 +66,6 @@ impl Action for PatchAction {
     }
     fn provides(&self) -> &[Tag] {
         &self.provides
-    }
-    fn id(&self) -> String {
-        self.id.clone()
     }
 
     fn execute(&self) -> Result<(), ActionError> {

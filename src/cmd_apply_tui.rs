@@ -2,6 +2,7 @@
 // TUI for interactive apply using ratatui
 
 use crate::Cli;
+use crate::action::Action;
 use crate::config::{GlobalConfig, Tag};
 use crate::execution_plan::create_execution_plan;
 use crate::hermitgrab_error::ApplyError;
@@ -113,7 +114,7 @@ impl App {
     }
 }
 
-pub(crate) fn run_tui(
+pub fn run_tui(
     global_config: &Arc<GlobalConfig>,
     _cli: &Cli,
     tags: &[String],

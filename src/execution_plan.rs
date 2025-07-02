@@ -6,7 +6,9 @@ use std::{
 
 use crate::{
     RequireTag,
-    action::{ArcAction, install::InstallAction, link::LinkAction, patch::PatchAction},
+    action::{
+        Action, Actions, ArcAction, install::InstallAction, link::LinkAction, patch::PatchAction,
+    },
     config::{GlobalConfig, Tag},
     hermitgrab_error::{ActionError, ApplyError},
 };
@@ -91,34 +93,16 @@ pub fn create_execution_plan(
     let mut actions: Vec<ArcAction> = Vec::new();
     for cfg in global_config.subconfigs.values() {
         for link_config in &cfg.file {
-            let id = format!(
-                "link:{}:{}",
-                cfg.path().display(),
-                link_config.target.display()
-            );
-            actions.push(Arc::new(LinkAction::new(id, link_config, cfg)));
+            actions.push(Arc::new(Actions::Link(LinkAction::new(link_config, cfg))));
         }
         for patch in &cfg.patch {
-            let id = format!("link:{}:{}", cfg.path().display(), patch.target.display());
-            let source = cfg
-                .path()
-                .parent()
-                .expect("File should have a directory")
-                .join(&patch.source);
-            actions.push(Arc::new(PatchAction::new(
-                id,
-                &global_config.root_dir,
-                source,
-                patch.target.clone(),
-                patch.get_requires(cfg),
-                cfg.provides.clone(),
-                patch.patch_type.clone(),
-                cfg,
-            )));
+            actions.push(Arc::new(Actions::Patch(PatchAction::new(patch, cfg))));
         }
         for install_entry in &cfg.install {
-            let id = format!("install:{}:{}", cfg.path().display(), install_entry.name);
-            actions.push(Arc::new(InstallAction::new(id, install_entry, cfg)?));
+            actions.push(Arc::new(Actions::Install(InstallAction::new(
+                install_entry,
+                cfg,
+            )?)));
         }
     }
     Ok(ExecutionPlan { actions })
@@ -134,11 +118,13 @@ mod tests {
     #[test]
     fn test_topology_sorting() {
         let default_config = Arc::new(GlobalConfig::default());
-        let mut cfg = HermitConfig::create_new(&PathBuf::from("/tmp/hermitgrab"), default_config);
+        let mut cfg = HermitConfig::create_new(
+            &PathBuf::from("/tmp/hermitgrab"),
+            Arc::downgrade(&default_config),
+        );
         cfg.sources
             .insert("install_source".to_string(), "install_cmd".to_string());
-        let link_action_a = Arc::new(LinkAction::new(
-            "link:action_a".to_string(),
+        let link_action_a = Arc::new(Actions::Link(LinkAction::new(
             &LinkConfig {
                 source: PathBuf::from("/source/a"),
                 target: PathBuf::from("target_a"),
@@ -148,9 +134,8 @@ mod tests {
                 fallback: FallbackOperation::Abort,
             },
             &cfg,
-        ));
-        let link_action_b = Arc::new(LinkAction::new(
-            "link:action_b".to_string(),
+        )));
+        let link_action_b = Arc::new(Actions::Link(LinkAction::new(
             &LinkConfig {
                 source: PathBuf::from("/source/b"),
                 target: PathBuf::from("target_b"),
@@ -160,10 +145,9 @@ mod tests {
                 fallback: FallbackOperation::Abort,
             },
             &cfg,
-        ));
-        let install_action = Arc::new(
+        )));
+        let install_action = Arc::new(Actions::Install(
             InstallAction::new(
-                "install:action".to_string(),
                 &crate::InstallConfig {
                     name: "action".to_string(),
                     source: "install_source".to_string(),
@@ -174,7 +158,7 @@ mod tests {
                 &cfg,
             )
             .unwrap(),
-        );
+        ));
         let actions: Vec<ArcAction> = vec![install_action, link_action_a, link_action_b];
         let plan = ExecutionPlan { actions };
         assert_eq!(plan.actions.len(), 3);
