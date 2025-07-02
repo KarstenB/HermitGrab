@@ -44,7 +44,7 @@ thiserror = "2.0.12"
 tokio = { version = "1.45.1", features = ["full"] }
 toml = "0.8.23"
 toml_edit = { version = "0.22.27", features = ["serde"] }
-ubi = { version = "0.7.1", optional = true, features = ["logging"] }
+ubi = { version = "0.7.2", optional = true, features = ["logging"] }
 unicode-width = "0.2.0"
 which = "8.0.0"
 whoami = "1.6.0"
