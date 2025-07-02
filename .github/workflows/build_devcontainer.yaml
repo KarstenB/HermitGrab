@@ -7,10 +7,11 @@ on:
     paths:
       - '.devcontainer/**'
 jobs:
-  build-linux-win:
+  build-devcontainer:
     runs-on: ubuntu-latest
-    permissions: 
+    permissions:
       contents: write
+      packages: write
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v3
