@@ -1,10 +1,10 @@
-name: Build
+name: Build DevContainer
 on:
   push:
     branches:
       - main
     paths:
-      - 'devcontainer/**'
+      - '.devcontainer/**'
 jobs:
   build-linux-win:
     runs-on: ubuntu-latest
