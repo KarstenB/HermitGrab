@@ -8,7 +8,6 @@ use crate::{
     action::{Action, ActionOutput},
     config::{PatchConfig, PatchType, Tag},
     hermitgrab_error::{ActionError, PatchActionError},
-    user_home,
 };
 
 #[derive(Derivative)]
@@ -29,7 +28,7 @@ impl PatchAction {
         let rel_src = patch.source.to_string_lossy().to_string();
         let dst = cfg.global_config().expand_directory(&patch.target);
         let rel_dst = dst
-            .strip_prefix(user_home())
+            .strip_prefix(cfg.global_config().home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();

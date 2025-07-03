@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crossterm::style::{Attribute, Color, Stylize};
 
-use crate::Cli;
 use crate::action::{Action, ArcAction};
 use crate::common_cli::success;
 use crate::common_cli::{stderr, stdout};
@@ -17,7 +16,8 @@ use crate::common_cli::step;
 
 pub fn apply_with_tags(
     global_config: &Arc<GlobalConfig>,
-    cli: &Cli,
+    confirm: bool,
+    verbose: bool,
     tags: &[String],
     profile: &Option<String>,
 ) -> Result<(), ApplyError> {
@@ -32,11 +32,11 @@ pub fn apply_with_tags(
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
     let sorted = filtered_actions.sort_by_requires();
     present_execution_plan(&sorted);
-    if !cli.confirm {
+    if !confirm {
         confirm_with_user()?;
     }
     let results = sorted.execute_actions();
-    summarize(&sorted, &results, cli.verbose);
+    summarize(&sorted, &results, verbose);
     Ok(())
 }
 

@@ -8,7 +8,6 @@ use crate::{
     config::{FallbackOperation, Tag},
     file_ops::link_files,
     hermitgrab_error::{ActionError, LinkActionError},
-    user_home,
 };
 
 #[derive(Derivative)]
@@ -34,7 +33,7 @@ impl LinkAction {
             .to_string();
         let dst = cfg.global_config().expand_directory(&link_config.target);
         let rel_dst = dst
-            .strip_prefix(user_home())
+            .strip_prefix(cfg.global_config().home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();

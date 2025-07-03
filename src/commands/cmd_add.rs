@@ -17,7 +17,7 @@ use crate::{
     error,
     file_ops::copy,
     hermitgrab_error::AddError,
-    info, success, user_home,
+    info, success,
 };
 
 pub fn add_config(
@@ -113,7 +113,7 @@ pub fn add_link(
             "To avoid being prompted about the directory, you can use the --target-dir command line option",
         );
         let relative_source = absolute_source
-            .strip_prefix(user_home())
+            .strip_prefix(global_config.home_dir())
             .unwrap_or(&absolute_source);
         let last_segment_from_absolute = if absolute_source.is_dir() {
             absolute_source
@@ -178,11 +178,11 @@ pub fn add_link(
     let config_file = target_dir.join(CONF_FILE_NAME);
     let target = if let Some(destination) = destination {
         let path = PathBuf::from(destination);
-        path.strip_prefix(user_home())
+        path.strip_prefix(global_config.home_dir())
             .map(|x| x.to_path_buf())
             .unwrap_or(path)
     } else {
-        source.strip_prefix(user_home())?.to_path_buf()
+        source.strip_prefix(global_config.home_dir())?.to_path_buf()
     };
     let target = if target.is_absolute() {
         target

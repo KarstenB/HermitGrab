@@ -28,19 +28,14 @@ impl InstallAction {
     pub fn new(install_entry: &InstallConfig, cfg: &HermitConfig) -> Result<Self, ConfigError> {
         let lc_src = install_entry.source.to_lowercase();
         let global_config = cfg.global_config();
-        let install_cmd = global_config.all_sources.get(&lc_src);
+        let install_cmd = global_config.get_source(&lc_src);
         let Some(install_cmd) = install_cmd else {
-            log::debug!(
-                "Install source '{}' not found in global config sources {:?}",
-                lc_src,
-                global_config.all_sources.keys()
-            );
             return Err(ConfigError::InstallSourceNotFound(lc_src.clone()));
         };
         let mut variables = install_entry.variables.clone();
         variables.insert(
             "hermit_root_dir".to_string(),
-            global_config.root_dir.to_string_lossy().to_string(),
+            global_config.hermit_dir().to_string_lossy().to_string(),
         );
         variables.insert(
             "hermit_this_dir".to_string(),

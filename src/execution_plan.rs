@@ -91,7 +91,7 @@ pub fn create_execution_plan(
     global_config: &Arc<GlobalConfig>,
 ) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<ArcAction> = Vec::new();
-    for cfg in global_config.subconfigs.values() {
+    for (_, cfg) in global_config.subconfigs() {
         for link_config in &cfg.file {
             actions.push(Arc::new(Actions::Link(LinkAction::new(link_config, cfg))));
         }

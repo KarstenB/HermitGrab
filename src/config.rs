@@ -577,20 +577,26 @@ impl InstallConfig {
 
 #[derive(Debug, Default)]
 pub struct GlobalConfig {
-    pub root_dir: PathBuf,
-    pub subconfigs: BTreeMap<String, HermitConfig>,
-    pub all_profiles: BTreeMap<String, BTreeSet<Tag>>,
-    pub all_provided_tags: BTreeSet<Tag>,
-    pub all_detected_tags: BTreeSet<Tag>,
-    pub all_sources: BTreeMap<String, String>,
+    hermit_dir: PathBuf,
+    home_dir: PathBuf,
+    subconfigs: BTreeMap<String, HermitConfig>,
+    all_profiles: BTreeMap<String, BTreeSet<Tag>>,
+    all_provided_tags: BTreeSet<Tag>,
+    all_detected_tags: BTreeSet<Tag>,
+    all_sources: BTreeMap<String, String>,
 }
 
 impl GlobalConfig {
-    pub fn from_paths(root_dir: &Path, paths: &[PathBuf]) -> Result<Arc<Self>, ConfigError> {
+    pub fn from_paths(
+        hermit_dir: &Path,
+        home_dir: &Path,
+        paths: &[PathBuf],
+    ) -> Result<Arc<Self>, ConfigError> {
         let mut errors = Vec::new();
         Ok(Arc::new_cyclic(|global_config: &Weak<GlobalConfig>| {
             let mut result = GlobalConfig {
-                root_dir: root_dir.to_path_buf(),
+                hermit_dir: hermit_dir.to_path_buf(),
+                home_dir: home_dir.to_path_buf(),
                 ..Default::default()
             };
             for path in paths {
@@ -641,7 +647,7 @@ impl GlobalConfig {
                     }
                     result.all_profiles.insert(profile_lc, tags.clone());
                 }
-                let relative_path = path.strip_prefix(root_dir).unwrap_or(path);
+                let relative_path = path.strip_prefix(hermit_dir).unwrap_or(path);
                 let relative_path_str = relative_path.to_string_lossy().to_string();
                 result.subconfigs.insert(relative_path_str, config);
             }
@@ -652,7 +658,27 @@ impl GlobalConfig {
     }
 
     pub fn hermit_dir(&self) -> &Path {
-        &self.root_dir
+        &self.hermit_dir
+    }
+
+    pub fn home_dir(&self) -> &Path {
+        &self.home_dir
+    }
+
+    pub fn all_provided_tags(&self) -> &BTreeSet<Tag> {
+        &self.all_provided_tags
+    }
+
+    pub fn all_profiles(&self) -> impl IntoIterator<Item = (&String, &BTreeSet<Tag>)> {
+        self.all_profiles.iter()
+    }
+
+    pub fn subconfigs(&self) -> impl IntoIterator<Item = (&String, &HermitConfig)> {
+        self.subconfigs.iter()
+    }
+
+    pub fn get_source(&self, key: &str) -> Option<&String> {
+        self.all_sources.get(key)
     }
 
     pub fn get_active_tags(
@@ -715,7 +741,7 @@ impl GlobalConfig {
     }
 
     pub fn root_config(&self) -> Option<&HermitConfig> {
-        let root_path = self.root_dir.join(CONF_FILE_NAME);
+        let root_path = self.hermit_dir.join(CONF_FILE_NAME);
         self.subconfigs
             .get(&root_path.to_string_lossy().to_string())
     }

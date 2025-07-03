@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{config::GlobalConfig, error, hermitgrab_error::StatusError, info, success};
 
 pub fn get_status(cfg: &Arc<GlobalConfig>) -> Result<(), StatusError> {
-    for (dir, cfg) in &cfg.subconfigs {
+    for (dir, cfg) in cfg.subconfigs() {
         info!("Checking {dir}");
         for file in &cfg.file {
             let fs = file.check(cfg, true);

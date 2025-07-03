@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub fn clone_or_update_repo(
-    repo: String,
+    repo: &str,
     token: Option<&str>,
     global_config: &Arc<GlobalConfig>,
 ) -> Result<(), DiscoverError> {
@@ -87,7 +87,7 @@ pub async fn discover_repo_with_github(
     };
 
     if let Some(clone_url) = &selected_repo.clone_url {
-        clone_or_update_repo(clone_url.to_string(), Some(&token), global_config)?;
+        clone_or_update_repo(&clone_url.to_string(), Some(&token), global_config)?;
     } else {
         return Err(DiscoverError::NoGitCloneUrl(selected_repo.name.to_string()));
     }
@@ -137,7 +137,7 @@ async fn github_create_repo(
     success!("Created repo: {:?}", repo.full_name);
     if let Some(clone_url) = &repo.clone_url {
         hermitgrab_info!("Cloning {}...", clone_url);
-        clone_or_update_repo(clone_url.to_string(), Some(token), global_config)?;
+        clone_or_update_repo(&clone_url.to_string(), Some(token), global_config)?;
     } else {
         return Err(DiscoverError::NoGitCloneUrl(repo_name.to_string()));
     };

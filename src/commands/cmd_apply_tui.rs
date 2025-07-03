@@ -116,7 +116,6 @@ impl App {
 
 pub fn run_tui(
     global_config: &Arc<GlobalConfig>,
-    _cli: &Cli,
     tags: &[String],
     profile: &Option<String>,
 ) -> Result<(), ApplyError> {
