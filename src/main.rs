@@ -54,7 +54,7 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    simple_logger::init_with_env().unwrap();
+    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Error).env().init()?;
     let cli = Cli::parse();
     let search_root = init_hermit_dir(&cli.hermit_dir);
     let yaml_files = find_hermit_files(&search_root);
