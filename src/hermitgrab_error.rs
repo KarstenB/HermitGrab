@@ -103,6 +103,8 @@ pub enum AddError {
     SourceAlreadyExists(PathBuf),
     #[error("The configuration file {0} already exists")]
     ConfigFileAlreadyExists(PathBuf),
+    #[error("The configuration file {0} does not exist")]
+    ConfigFileNotFound(PathBuf),
 }
 
 #[derive(Debug, Error)]

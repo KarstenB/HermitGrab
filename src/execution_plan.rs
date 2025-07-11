@@ -9,7 +9,7 @@ use crate::{
     action::{
         Action, Actions, ArcAction, install::InstallAction, link::LinkAction, patch::PatchAction,
     },
-    config::{GlobalConfig, Tag},
+    config::{FallbackOperation, GlobalConfig, Tag},
     hermitgrab_error::{ActionError, ApplyError},
 };
 pub struct ExecutionPlan {
@@ -89,11 +89,16 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
 
 pub fn create_execution_plan(
     global_config: &Arc<GlobalConfig>,
+    fallback: &Option<FallbackOperation>,
 ) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<ArcAction> = Vec::new();
     for (_, cfg) in global_config.subconfigs() {
-        for link_config in &cfg.file {
-            actions.push(Arc::new(Actions::Link(LinkAction::new(link_config, cfg))));
+        for link_config in &cfg.link {
+            actions.push(Arc::new(Actions::Link(LinkAction::new(
+                link_config,
+                cfg,
+                fallback,
+            ))));
         }
         for patch in &cfg.patch {
             actions.push(Arc::new(Actions::Patch(PatchAction::new(patch, cfg))));
@@ -134,6 +139,7 @@ mod tests {
                 fallback: FallbackOperation::Abort,
             },
             &cfg,
+            &None,
         )));
         let link_action_b = Arc::new(Actions::Link(LinkAction::new(
             &LinkConfig {
@@ -145,6 +151,7 @@ mod tests {
                 fallback: FallbackOperation::Abort,
             },
             &cfg,
+            &None,
         )));
         let install_action = Arc::new(Actions::Install(
             InstallAction::new(

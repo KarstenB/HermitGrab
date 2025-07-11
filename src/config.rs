@@ -192,7 +192,7 @@ pub struct HermitConfig {
     pub provides: BTreeSet<Tag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub file: Vec<LinkConfig>,
+    pub link: Vec<LinkConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub patch: Vec<PatchConfig>,

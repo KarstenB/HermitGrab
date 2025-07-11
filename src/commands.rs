@@ -176,6 +176,12 @@ pub enum Commands {
             global = true
         )]
         profile: Option<String>,
+        /// Override the fallback behavior for existing files
+        #[arg(short = 'f', long, value_enum)]
+        fallback: Option<FallbackOperation>,
+        /// Same as -f backupoverwrite
+        #[arg(short = 'F', long)]
+        force: bool,
     },
     /// Show status of managed files
     Status,
@@ -272,17 +278,38 @@ pub async fn execute(
         Commands::Apply {
             ref tags,
             ref profile,
+            ref fallback,
+            ref force,
         } => {
+            let fallback = if *force {
+                Some(FallbackOperation::BackupOverwrite)
+            } else {
+                *fallback
+            };
             #[cfg(feature = "interactive")]
             if interactive {
                 cmd_apply_tui::run_tui(&global_config, tags, profile)?;
             } else {
-                cmd_apply::apply_with_tags(&global_config, confirm, verbose, tags, profile)?;
+                cmd_apply::apply_with_tags(
+                    &global_config,
+                    confirm,
+                    verbose,
+                    tags,
+                    profile,
+                    &fallback,
+                )?;
             }
             #[cfg(not(feature = "interactive"))]
             {
                 let _ = interactive;
-                cmd_apply::apply_with_tags(&global_config, confirm, verbose, tags, profile)?;
+                cmd_apply::apply_with_tags(
+                    &global_config,
+                    confirm,
+                    verbose,
+                    tags,
+                    profile,
+                    &fallback,
+                )?;
             }
         }
         Commands::Status => {

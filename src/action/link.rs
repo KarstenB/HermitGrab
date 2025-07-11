@@ -23,7 +23,11 @@ pub struct LinkAction {
     fallback: FallbackOperation,
 }
 impl LinkAction {
-    pub fn new(link_config: &LinkConfig, cfg: &HermitConfig) -> Self {
+    pub fn new(
+        link_config: &LinkConfig,
+        cfg: &HermitConfig,
+        fallback: &Option<FallbackOperation>,
+    ) -> Self {
         let src = cfg.directory().join(&link_config.source);
         let rel_src = link_config
             .source
@@ -39,6 +43,7 @@ impl LinkAction {
             .to_string();
         let provides = link_config.get_provides(cfg);
         let requires = link_config.get_requires(cfg);
+        let fallback = (*fallback).unwrap_or(link_config.fallback);
         Self {
             src,
             rel_src,
@@ -47,7 +52,7 @@ impl LinkAction {
             link_type: link_config.link,
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
-            fallback: link_config.fallback,
+            fallback,
         }
     }
 }

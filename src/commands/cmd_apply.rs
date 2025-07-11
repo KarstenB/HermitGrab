@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crossterm::style::{Attribute, Color, Stylize};
 
 use crate::action::{Action, ArcAction};
+use crate::commands::FallbackOperation;
 use crate::common_cli::success;
 use crate::common_cli::{stderr, stdout};
 use crate::config::GlobalConfig;
@@ -20,6 +21,7 @@ pub fn apply_with_tags(
     verbose: bool,
     tags: &[String],
     profile: &Option<String>,
+    fallback: &Option<FallbackOperation>,
 ) -> Result<(), ApplyError> {
     let active_tags = global_config.get_active_tags(tags, profile)?;
     let active_tags_str = active_tags
@@ -28,7 +30,7 @@ pub fn apply_with_tags(
         .collect::<Vec<_>>()
         .join(", ");
     hermitgrab_info!("Active tags: {}", active_tags_str);
-    let actions = create_execution_plan(global_config)?;
+    let actions = create_execution_plan(global_config, fallback)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
     let sorted = filtered_actions.sort_by_requires();
     present_execution_plan(&sorted);

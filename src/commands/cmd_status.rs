@@ -5,7 +5,7 @@ use crate::{config::GlobalConfig, error, hermitgrab_error::StatusError, info, su
 pub fn get_status(cfg: &Arc<GlobalConfig>) -> Result<(), StatusError> {
     for (dir, cfg) in cfg.subconfigs() {
         info!("Checking {dir}");
-        for file in &cfg.file {
+        for file in &cfg.link {
             let fs = file.check(cfg, true);
             if fs.is_ok() {
                 success!("Link {} is ok", file.source.display());

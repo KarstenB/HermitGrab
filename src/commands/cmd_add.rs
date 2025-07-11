@@ -57,7 +57,7 @@ pub fn add_config(
     };
     config.provides.extend(provided_tags);
     config.requires.extend(required_tags.to_vec());
-    config.file.extend(files.to_vec());
+    config.link.extend(files.to_vec());
     config.install.extend(installs.to_vec());
     std::fs::create_dir_all(config_dir)?;
     config.save_to_file(&config_file)?;
@@ -223,7 +223,7 @@ pub fn add_link(
 fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Result<(), AddError> {
     let table = to_table(file_entry)?;
     let mut config = load_hermit_config_editable(config_file)?;
-    let files = config["files"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
+    let files = config["link"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
     match files {
         Item::ArrayOfTables(arr) => {
             for entry in arr.iter() {
@@ -237,7 +237,7 @@ fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Resul
                 let target_str = PathBuf::from(target.value());
                 if source_str == file_entry.source && target_str == file_entry.target {
                     error!(
-                        "The [[files]] table already contains an entry with the same source {} and target {}",
+                        "The [[link]] table already contains an entry with the same source {} and target {}",
                         source_str.display(),
                         target_str.display()
                     );
@@ -248,7 +248,7 @@ fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Resul
         }
         i => {
             return Err(AddError::ExpectedTable(
-                "files".to_string(),
+                "link".to_string(),
                 i.type_name().to_string(),
             ));
         }
@@ -267,7 +267,7 @@ fn to_table(file_entry: &LinkConfig) -> Result<toml_edit::Table, AddError> {
         Item::Value(Value::InlineTable(it)) => it.into_table(),
         i => {
             return Err(AddError::ExpectedTable(
-                "file".to_string(),
+                "link".to_string(),
                 i.type_name().to_string(),
             ));
         }
@@ -282,6 +282,20 @@ pub fn add_profile(
 ) -> Result<(), AddError> {
     let config_file = global_config.hermit_dir().join(CONF_FILE_NAME);
     info!("Updating profiles in {config_file:?}");
+    if !config_file.exists() {
+        config_file.parent().map_or_else(
+            || {
+                error!("HermitGrab configuration file not found at {config_file:?}");
+                Err(AddError::ConfigFileNotFound(config_file.clone()))
+            },
+            |parent| {
+                std::fs::create_dir_all(parent)?;
+                Ok(())
+            },
+        )?;
+        std::fs::write(&config_file, "")?;
+        info!("Created new configuration file at {config_file:?}");
+    }
     let mut config = load_hermit_config_editable(&config_file)?;
     let profiles = config["profiles"].or_insert(Item::Table(Table::new()));
     match profiles {
