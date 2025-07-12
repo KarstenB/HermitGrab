@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use derivative::Derivative;
 use itertools::Itertools;
 use serde::Serialize;
 
@@ -12,8 +11,7 @@ use crate::{
     hermitgrab_error::{ActionError, LinkActionError},
 };
 
-#[derive(Derivative, Serialize)]
-#[derivative(Debug, Hash, PartialEq)]
+#[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct LinkAction {
     #[serde(skip)]
     rel_src: String,

@@ -1,6 +1,6 @@
 use std::{io::Write, process::Output, sync::Mutex};
 
-use derivative::Derivative;
+use derive_where::derive_where;
 use serde::Serialize;
 
 use crate::{
@@ -10,8 +10,8 @@ use crate::{
     hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
-#[derive(Derivative, Serialize)]
-#[derivative(Debug, Hash, PartialEq)]
+#[derive(Serialize)]
+#[derive_where(Debug, Hash, PartialEq)]
 pub struct InstallAction {
     name: String,
     requires: Vec<RequireTag>,
@@ -20,9 +20,7 @@ pub struct InstallAction {
     pre_install_cmd: Option<String>,
     post_install_cmd: Option<String>,
     install_cmd: String,
-    #[derivative(Debug = "ignore")]
-    #[derivative(Hash = "ignore")]
-    #[derivative(PartialEq = "ignore")]
+    #[derive_where(skip)]
     output: Mutex<Option<ActionOutput>>,
 }
 impl InstallAction {

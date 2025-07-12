@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use derivative::Derivative;
 use itertools::Itertools;
 use jsonc_parser::ParseOptions;
 use serde::Serialize;
@@ -12,8 +11,7 @@ use crate::{
     hermitgrab_error::{ActionError, PatchActionError},
 };
 
-#[derive(Derivative, Serialize)]
-#[derivative(Debug, Hash, PartialEq)]
+#[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct PatchAction {
     #[serde(skip)]
     rel_src: String,

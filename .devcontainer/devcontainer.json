@@ -4,7 +4,8 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"timonwong.shellcheck"
+				"timonwong.shellcheck",
+				"fill-labs.dependi"
 			]
 		}
 	}
