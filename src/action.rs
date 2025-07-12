@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use enum_dispatch::enum_dispatch;
+use serde::Serialize;
 
 use crate::config::Tag;
 use crate::hermitgrab_error::ActionError;
@@ -10,7 +11,7 @@ pub mod install;
 pub mod link;
 pub mod patch;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct ActionOutput {
     output_order: Vec<String>,
     standard_output: HashMap<String, String>,
@@ -66,6 +67,7 @@ impl IntoIterator for ActionOutput {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
 pub enum Status {
     Ok(String),
     NotOk(String),
@@ -97,7 +99,7 @@ pub fn id_from_hash<T: Hash>(item: &T) -> String {
 }
 
 #[enum_dispatch(Action)]
-#[derive(Debug, Hash, PartialEq)]
+#[derive(Debug, Hash, PartialEq, Serialize)]
 pub enum Actions {
     Install(install::InstallAction),
     Link(link::LinkAction),

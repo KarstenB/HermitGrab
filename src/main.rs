@@ -78,6 +78,7 @@ async fn main() -> Result<()> {
         cli.confirm,
         cli.verbose,
         interactive,
+        cli.json,
     )
     .await?;
 

@@ -4,6 +4,8 @@ use std::{
     sync::Arc,
 };
 
+use serde::Serialize;
+
 use crate::{
     RequireTag,
     action::{Action, ArcAction},
@@ -11,8 +13,14 @@ use crate::{
     hermitgrab_error::{ActionError, ApplyError},
 };
 pub type ArcConfigAction = (ArcHermitConfig, ArcAction);
+#[derive(Debug, Serialize)]
 pub struct ExecutionPlan {
     pub actions: Vec<ArcConfigAction>,
+}
+
+pub struct ActionResult {
+    pub action: ArcAction,
+    pub result: Result<(), ActionError>,
 }
 impl ExecutionPlan {
     pub fn iter(&self) -> std::slice::Iter<'_, ArcConfigAction> {
@@ -80,11 +88,14 @@ impl ExecutionPlan {
         ExecutionPlan { actions: sorted }
     }
 
-    pub fn execute_actions(&self) -> Vec<(String, Result<(), ActionError>)> {
+    pub fn execute_actions(&self) -> Vec<ActionResult> {
         let mut results = Vec::new();
         for (_, a) in self.actions.iter() {
             let res = a.execute();
-            results.push((a.short_description(), res));
+            results.push(ActionResult {
+                action: a.clone(),
+                result: res,
+            });
         }
         results
     }

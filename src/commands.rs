@@ -51,6 +51,15 @@ pub struct Cli {
     pub verbose: bool,
     #[arg(short = 'y', long, env = "HERMIT_CONFIRM", global = true)]
     pub confirm: bool,
+    #[arg(
+        long,
+        env = "HERMIT_JSON",
+        global = true,
+        value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath,
+        hide = true,
+    )]
+    pub json: Option<PathBuf>,
     /// Path to the hermitgrab config directory
     /// If not set, defaults to ~/.hermitgrab
     #[arg(
@@ -58,7 +67,8 @@ pub struct Cli {
         long,
         env = "HERMIT_DIR",
         global = true,
-        value_name = "PATH"
+        value_name = "PATH",
+        value_hint = clap::ValueHint::DirPath,
     )]
     pub hermit_dir: Option<PathBuf>,
 }
@@ -77,11 +87,11 @@ pub enum AddCommand {
     },
     /// Add a new Link to the config
     Link {
+        /// Source file or directory to link
+        source: PathBuf,
         /// Subdirectory of the hermit.toml file to add the link to
         #[arg(long)]
         config_dir: Option<PathBuf>,
-        /// Source file or directory to link
-        source: PathBuf,
         /// Link type to use
         #[arg(short = 'l', long, default_value = "soft", value_enum)]
         link_type: LinkType,
@@ -225,6 +235,7 @@ pub async fn execute(
     confirm: bool,
     verbose: bool,
     interactive: bool,
+    json: Option<PathBuf>,
 ) -> Result<(), anyhow::Error> {
     let search_root = global_config.hermit_dir();
     match command {
@@ -308,6 +319,7 @@ pub async fn execute(
                 verbose,
                 tags: tags.clone(),
                 profile: profile.clone(),
+                json: json.clone(),
             };
             #[cfg(feature = "interactive")]
             if interactive {
@@ -329,6 +341,7 @@ pub async fn execute(
             let cli = CliOptions {
                 tags: tags.clone(),
                 profile: profile.clone(),
+                json: json.clone(),
                 ..Default::default()
             };
             cmd_status::get_status(&global_config, !extensive, &cli)?;

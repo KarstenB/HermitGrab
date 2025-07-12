@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use derivative::Derivative;
+use serde::Serialize;
 
 use crate::{
     HermitConfig, LinkConfig, LinkType, RequireTag,
@@ -10,10 +11,12 @@ use crate::{
     hermitgrab_error::{ActionError, LinkActionError},
 };
 
-#[derive(Derivative)]
+#[derive(Derivative, Serialize)]
 #[derivative(Debug, Hash, PartialEq)]
 pub struct LinkAction {
+    #[serde(skip)]
     rel_src: String,
+    #[serde(skip)]
     rel_dst: String,
     src: PathBuf,
     dst: PathBuf,

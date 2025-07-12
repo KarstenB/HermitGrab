@@ -592,6 +592,7 @@ pub struct CliOptions {
     pub verbose: bool,
     pub tags: Vec<String>,
     pub profile: Option<String>,
+    pub json: Option<PathBuf>,
 }
 
 pub trait ConfigItem {

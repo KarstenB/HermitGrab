@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -7,8 +8,8 @@ use crate::action::{Action, ArcAction};
 use crate::common_cli::success;
 use crate::common_cli::{stderr, stdout};
 use crate::config::{CliOptions, GlobalConfig};
-use crate::execution_plan::{ExecutionPlan, create_execution_plan};
-use crate::hermitgrab_error::{ActionError, ApplyError};
+use crate::execution_plan::{ActionResult, ExecutionPlan, create_execution_plan};
+use crate::hermitgrab_error::ApplyError;
 use crate::{error, hermitgrab_info};
 
 #[allow(unused_imports)]
@@ -33,7 +34,35 @@ pub fn apply_with_tags(
         confirm_with_user()?;
     }
     let results = sorted.execute_actions();
-    summarize(&sorted, &results, cli.verbose);
+    summarize(&results, cli.verbose);
+    if let Some(json_path) = &cli.json {
+        let actions = sorted
+            .actions
+            .iter()
+            .map(|(_, action)| (action.id(), action))
+            .collect::<BTreeMap<_, _>>();
+        let results = results
+            .iter()
+            .map(|a| {
+                let id = a.action.id();
+                let output = a.action.get_output();
+                (
+                    id,
+                    serde_json::json!({
+                        "ok": a.result.is_ok(),
+                        "error": a.result.as_ref().err().map(|e| e.to_string()),
+                        "output": output,
+                        "short_description": a.action.short_description(),
+                    }),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let json = serde_json::json!({
+            "actions": actions,
+            "results": results,
+        });
+        std::fs::write(json_path, serde_json::to_string_pretty(&json)?)?;
+    }
     Ok(())
 }
 
@@ -65,16 +94,15 @@ fn confirm_with_user() -> Result<(), ApplyError> {
     Ok(())
 }
 
-fn summarize(
-    actions: &ExecutionPlan,
-    results: &[(String, Result<(), ActionError>)],
-    verbose: bool,
-) {
+fn summarize(results: &[ActionResult], verbose: bool) {
     hermitgrab_info("Summary:");
-    for ((_, action), (desc, res)) in actions.iter().zip(results) {
+    for result in results {
+        let action = &result.action;
+        let desc = action.short_description();
+        let res = &result.result;
         match res {
             Ok(_) => {
-                success(desc);
+                success(&desc);
                 if verbose {
                     print_action_output(action);
                 }

@@ -54,6 +54,10 @@ pub enum StatusError {
     ConfigError(#[from] ConfigError),
     #[error(transparent)]
     ApplyError(#[from] ApplyError),
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error),
+    #[error(transparent)]
+    StdIoError(#[from] std::io::Error),
 }
 
 #[derive(Debug, Error)]
@@ -130,6 +134,8 @@ pub enum ApplyError {
     TagNotFound(String),
     #[error(transparent)]
     ConfigLoadError(#[from] ConfigError),
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error),
 }
 
 #[derive(Debug, Error)]

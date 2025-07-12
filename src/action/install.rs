@@ -1,6 +1,7 @@
 use std::{io::Write, process::Output, sync::Mutex};
 
 use derivative::Derivative;
+use serde::Serialize;
 
 use crate::{
     HermitConfig, InstallConfig, RequireTag,
@@ -9,7 +10,7 @@ use crate::{
     hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
-#[derive(Derivative)]
+#[derive(Derivative, Serialize)]
 #[derivative(Debug, Hash, PartialEq)]
 pub struct InstallAction {
     name: String,

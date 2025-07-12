@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use derivative::Derivative;
 use jsonc_parser::ParseOptions;
+use serde::Serialize;
 
 use crate::{
     HermitConfig, RequireTag,
@@ -10,10 +11,12 @@ use crate::{
     hermitgrab_error::{ActionError, PatchActionError},
 };
 
-#[derive(Derivative)]
+#[derive(Derivative, Serialize)]
 #[derivative(Debug, Hash, PartialEq)]
 pub struct PatchAction {
+    #[serde(skip)]
     rel_src: String,
+    #[serde(skip)]
     rel_dst: String,
     src: PathBuf,
     dst: PathBuf,
