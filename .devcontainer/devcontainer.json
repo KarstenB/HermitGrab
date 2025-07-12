@@ -1,4 +1,11 @@
 {
 	"name": "Build Hermitgrab DevContainer",
-    "image" :"ghcr.io/karstenb/hermitgrab-devcontainer"
+	"image": "ghcr.io/karstenb/hermitgrab-devcontainer",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"timonwong.shellcheck"
+			]
+		}
+	}
 }

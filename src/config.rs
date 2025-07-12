@@ -411,6 +411,18 @@ pub enum FallbackOperation {
     DeleteDir,
 }
 
+impl Display for FallbackOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FallbackOperation::Abort => f.write_str("abort"),
+            FallbackOperation::Backup => f.write_str("backup"),
+            FallbackOperation::BackupOverwrite => f.write_str("backupoverwrite"),
+            FallbackOperation::Delete => f.write_str("delete"),
+            FallbackOperation::DeleteDir => f.write_str("deletedir"),
+        }
+    }
+}
+
 impl ValueEnum for FallbackOperation {
     fn value_variants<'a>() -> &'a [Self] {
         &[

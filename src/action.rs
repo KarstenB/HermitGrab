@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 use enum_dispatch::enum_dispatch;
 use serde::Serialize;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::config::Tag;
 use crate::hermitgrab_error::ActionError;
@@ -92,10 +93,10 @@ pub trait Action: Send + Sync {
     fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status;
 }
 
-pub fn id_from_hash<T: Hash>(item: &T) -> String {
-    let mut hash = DefaultHasher::new();
+pub fn id_from_hash<T: Hash + Serialize>(item: &T) -> String {
+    let mut hash = Xxh3::new();
     item.hash(&mut hash);
-    format!("{}:{}", std::any::type_name::<T>(), hash.finish())
+    format!("{}:{:016x}", std::any::type_name::<T>(), hash.finish())
 }
 
 #[enum_dispatch(Action)]

@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
@@ -124,6 +125,8 @@ pub enum GetCommand {
     Tags,
     /// Show all profiles (from all configs)
     Profiles,
+    /// Config
+    Config,
 }
 
 #[derive(Subcommand)]
@@ -367,6 +370,20 @@ pub async fn execute(
                             .collect::<Vec<_>>()
                             .join(", ")
                     );
+                }
+            }
+            GetCommand::Config => {
+                let mut config_map = BTreeMap::new();
+                for (config_name, config) in global_config.subconfigs().into_iter() {
+                    config_map.insert(config_name, config.clone());
+                }
+
+                let formatted = serde_yml::to_string(&config_map)?;
+                info("Printing the complete configuration:");
+                println!("{}", formatted);
+                if let Some(json_path) = &json {
+                    std::fs::write(json_path, serde_json::to_string_pretty(&config_map)?)?;
+                    info!("Configuration written to {}", json_path.display());
                 }
             }
         },

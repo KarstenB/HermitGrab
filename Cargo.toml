@@ -48,6 +48,7 @@ ubi = { version = "0.7.2", optional = true, features = ["logging"] }
 unicode-width = "0.2.0"
 which = "8.0.0"
 whoami = "1.6.0"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [profile.release]
 lto = "fat"

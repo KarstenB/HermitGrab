@@ -1,0 +1,21 @@
+{
+  "test1/hermit.toml": {
+    "provides": [
+      "test1"
+    ],
+    "link": [
+      {
+        "source": "testfile.txt",
+        "target": "~/testfile.txt"
+      },
+      {
+        "source": "anotherfile.txt",
+        "target": "~/anotherfile.txt",
+        "requires": [
+          "-another"
+        ],
+        "fallback": "BackupOverwrite"
+      }
+    ]
+  }
+}

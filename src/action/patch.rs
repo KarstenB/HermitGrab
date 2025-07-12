@@ -1,12 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use derivative::Derivative;
+use itertools::Itertools;
 use jsonc_parser::ParseOptions;
 use serde::Serialize;
 
 use crate::{
     HermitConfig, RequireTag,
-    action::{Action, ActionOutput, Status, id_from_hash},
+    action::{Action, ActionOutput, Status},
     config::{ConfigItem, PatchConfig, PatchType, Tag},
     hermitgrab_error::{ActionError, PatchActionError},
 };
@@ -83,7 +84,13 @@ impl Action for PatchAction {
         }
     }
     fn id(&self) -> String {
-        id_from_hash(self)
+        format!(
+            "PatchAction:{}:{}:{}:{}",
+            self.rel_src,
+            self.rel_dst,
+            self.provides.iter().join(","),
+            self.requires.iter().join(",")
+        )
     }
     fn get_status(&self, _cfg: &HermitConfig, _quick: bool) -> Status {
         Status::NotSupported

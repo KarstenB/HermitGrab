@@ -1,0 +1,7 @@
+{
+  "test1/hermit.toml": {
+    "provides": [
+      "test1"
+    ]
+  }
+}

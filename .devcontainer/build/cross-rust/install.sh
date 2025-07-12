@@ -43,5 +43,5 @@ cargo binstall -y $TARGETS cargo-make
 cargo binstall -y $TARGETS cargo-nextest
 cargo binstall -y $TARGETS cargo-llvm-cov
 
-chown "${USERNAME}:rustlang" "${RUSTUP_HOME}" "${CARGO_HOME}"
+chown -R "${USERNAME}:rustlang" "${RUSTUP_HOME}" "${CARGO_HOME}"
 chmod g+r+w+s "${RUSTUP_HOME}" "${CARGO_HOME}"

@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
 use derivative::Derivative;
+use itertools::Itertools;
 use serde::Serialize;
 
 use crate::{
     HermitConfig, LinkConfig, LinkType, RequireTag,
-    action::{Action, Status, id_from_hash},
+    action::{Action, Status},
     config::{ConfigItem, FallbackOperation, FileStatus, Tag},
     file_ops::{check_copied, link_files},
     hermitgrab_error::{ActionError, LinkActionError},
@@ -25,6 +26,7 @@ pub struct LinkAction {
     provides: Vec<Tag>,
     fallback: FallbackOperation,
 }
+
 impl LinkAction {
     pub fn new(
         link_config: &LinkConfig,
@@ -147,7 +149,15 @@ impl Action for LinkAction {
         Ok(())
     }
     fn id(&self) -> String {
-        id_from_hash(self)
+        format!(
+            "LinkAction:{}:{}:{}:{}:{}:{}",
+            self.rel_src,
+            self.rel_dst,
+            self.link_type,
+            self.fallback,
+            self.provides.iter().join(","),
+            self.requires.iter().join(",")
+        )
     }
     fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status {
         let status = self.check(cfg, quick);
