@@ -8,7 +8,7 @@ use git2::Repository;
 
 use crate::{
     LinkType, RequireTag,
-    config::{FallbackOperation, GlobalConfig, Tag},
+    config::{CliOptions, FallbackOperation, GlobalConfig, Tag},
     detector,
 };
 use crate::{hermitgrab_info, info};
@@ -165,7 +165,7 @@ pub enum Commands {
     /// Install applications and link/copy dotfiles
     Apply {
         /// Include actions matching these tags (can be specified multiple times)
-        #[arg(short='t', long = "tag", env="HERMIT_TAGS", value_name = "TAG", num_args = 0.., global = true)]
+        #[arg(short='t', long = "tag", env="HERMIT_TAGS", value_name = "TAG", num_args = 0..)]
         tags: Vec<String>,
         /// Use a named profile which is a set of tags
         #[arg(
@@ -184,7 +184,23 @@ pub enum Commands {
         force: bool,
     },
     /// Show status of managed files
-    Status,
+    Status {
+        /// Include actions matching these tags (can be specified multiple times)
+        #[arg(short='t', long = "tag", env="HERMIT_TAGS", value_name = "TAG", num_args = 0..)]
+        tags: Vec<String>,
+        /// Use a named profile which is a set of tags
+        #[arg(
+            short = 'p',
+            long,
+            env = "HERMIT_PROFILE",
+            value_name = "PROFILE",
+            global = true
+        )]
+        profile: Option<String>,
+        /// Show status of all files, not just those with issues
+        #[arg(short = 'e', long, global = true, default_value_t = false)]
+        extensive: bool,
+    },
     /// Show tags or profiles
     Get {
         #[command(subcommand)]
@@ -286,34 +302,36 @@ pub async fn execute(
             } else {
                 *fallback
             };
+            let cli = CliOptions {
+                fallback,
+                confirm,
+                verbose,
+                tags: tags.clone(),
+                profile: profile.clone(),
+            };
             #[cfg(feature = "interactive")]
             if interactive {
                 cmd_apply_tui::run_tui(&global_config, tags, profile)?;
             } else {
-                cmd_apply::apply_with_tags(
-                    &global_config,
-                    confirm,
-                    verbose,
-                    tags,
-                    profile,
-                    &fallback,
-                )?;
+                cmd_apply::apply_with_tags(&global_config, &cli)?;
             }
             #[cfg(not(feature = "interactive"))]
             {
                 let _ = interactive;
-                cmd_apply::apply_with_tags(
-                    &global_config,
-                    confirm,
-                    verbose,
-                    tags,
-                    profile,
-                    &fallback,
-                )?;
+                cmd_apply::apply_with_tags(&global_config, &cli)?;
             }
         }
-        Commands::Status => {
-            cmd_status::get_status(&global_config)?;
+        Commands::Status {
+            extensive,
+            ref tags,
+            ref profile,
+        } => {
+            let cli = CliOptions {
+                tags: tags.clone(),
+                profile: profile.clone(),
+                ..Default::default()
+            };
+            cmd_status::get_status(&global_config, !extensive, &cli)?;
         }
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {

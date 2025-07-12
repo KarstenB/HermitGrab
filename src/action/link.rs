@@ -4,9 +4,9 @@ use derivative::Derivative;
 
 use crate::{
     HermitConfig, LinkConfig, LinkType, RequireTag,
-    action::Action,
-    config::{FallbackOperation, Tag},
-    file_ops::link_files,
+    action::{Action, Status, id_from_hash},
+    config::{ConfigItem, FallbackOperation, FileStatus, Tag},
+    file_ops::{check_copied, link_files},
     hermitgrab_error::{ActionError, LinkActionError},
 };
 
@@ -41,8 +41,8 @@ impl LinkAction {
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
-        let provides = link_config.get_provides(cfg);
-        let requires = link_config.get_requires(cfg);
+        let provides = link_config.get_all_provides(cfg);
+        let requires = link_config.get_all_requires(cfg);
         let fallback = (*fallback).unwrap_or(link_config.fallback);
         Self {
             src,
@@ -53,6 +53,64 @@ impl LinkAction {
             requires: requires.into_iter().collect(),
             provides: provides.into_iter().collect(),
             fallback,
+        }
+    }
+
+    pub fn check(&self, cfg: &HermitConfig, quick: bool) -> FileStatus {
+        let cfg_dir = cfg.directory();
+        let src_file = cfg_dir.join(&self.src);
+        let src_file = src_file.canonicalize().unwrap_or(src_file);
+        let actual_dst = cfg.global_config().expand_directory(&self.dst);
+        match actual_dst.try_exists() {
+            Ok(exists) => {
+                if !exists {
+                    return FileStatus::DestinationDoesNotExist(actual_dst);
+                }
+            }
+            Err(e) => return FileStatus::FailedToAccessFile(actual_dst, e),
+        }
+        match self.link_type {
+            LinkType::Soft => {
+                if !actual_dst.is_symlink() {
+                    return FileStatus::DestinationNotSymLink(actual_dst);
+                }
+                let read_link = actual_dst.canonicalize();
+                let Ok(read_link) = read_link else {
+                    return FileStatus::FailedToReadSymlink(actual_dst);
+                };
+                if read_link != src_file {
+                    return FileStatus::SymlinkDestinationMismatch(actual_dst, read_link);
+                }
+                FileStatus::Ok
+            }
+            LinkType::Hard => {
+                #[cfg(target_family = "unix")]
+                {
+                    let dst_meta = match actual_dst.metadata() {
+                        Ok(meta) => meta,
+                        Err(e) => return FileStatus::FailedToGetMetadata(actual_dst, e),
+                    };
+                    let src_meta = match src_file.metadata() {
+                        Ok(src_meta) => src_meta,
+                        Err(e) => return FileStatus::FailedToGetMetadata(src_file, e),
+                    };
+                    use std::os::unix::fs::MetadataExt;
+                    let dst_ino = dst_meta.ino();
+                    let src_ino = src_meta.ino();
+                    if src_ino != dst_ino {
+                        return FileStatus::InodeMismatch(actual_dst);
+                    }
+                    FileStatus::Ok
+                }
+                #[cfg(not(target_family = "unix"))]
+                {
+                    crate::common_cli::warn(
+                        "Hardlink check not supported on non unix systems, checking file similarity",
+                    );
+                    return check_copied(quick, &src_file, &actual_dst);
+                }
+            }
+            LinkType::Copy => check_copied(quick, &src_file, &actual_dst),
         }
     }
 }
@@ -84,6 +142,22 @@ impl Action for LinkAction {
         link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
             .map_err(LinkActionError::AtomicLinkError)?;
         Ok(())
+    }
+    fn id(&self) -> String {
+        id_from_hash(self)
+    }
+    fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status {
+        let status = self.check(cfg, quick);
+        if status.is_ok() {
+            return Status::Ok(format!("{} is linked", self.rel_dst));
+        }
+        if status.is_error() {
+            return Status::Error(format!(
+                "File check failed for {}: {}",
+                self.rel_dst, status
+            ));
+        }
+        Status::NotOk(format!("{} has issues: {}", self.rel_dst, status))
     }
 }
 

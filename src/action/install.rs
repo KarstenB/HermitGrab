@@ -4,8 +4,8 @@ use derivative::Derivative;
 
 use crate::{
     HermitConfig, InstallConfig, RequireTag,
-    action::{Action, ActionOutput},
-    config::Tag,
+    action::{Action, ActionOutput, Status, id_from_hash},
+    config::{ConfigItem, Tag},
     hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
@@ -28,7 +28,7 @@ impl InstallAction {
     pub fn new(install_entry: &InstallConfig, cfg: &HermitConfig) -> Result<Self, ConfigError> {
         let lc_src = install_entry.source.to_lowercase();
         let global_config = cfg.global_config();
-        let install_cmd = global_config.get_source(&lc_src);
+        let install_cmd = cfg.get_source(&lc_src);
         let Some(install_cmd) = install_cmd else {
             return Err(ConfigError::InstallSourceNotFound(lc_src.clone()));
         };
@@ -61,9 +61,9 @@ impl InstallAction {
             .as_deref()
             .map(|cmd| global_config.prepare_cmd(cmd, &variables))
             .transpose()?;
-        let install_cmd = global_config.prepare_cmd(install_cmd, &variables)?;
-        let requires = install_entry.get_requires(cfg);
-        let provides = install_entry.get_provides(cfg);
+        let install_cmd = global_config.prepare_cmd(&install_cmd, &variables)?;
+        let requires = install_entry.get_all_requires(cfg);
+        let provides = install_entry.get_all_provides(cfg);
         Ok(Self {
             name: install_entry.name.clone(),
             requires: requires.into_iter().collect(),
@@ -179,6 +179,17 @@ impl Action for InstallAction {
             .lock()
             .expect("Expected to unlock output mutex")
             .clone()
+    }
+    fn id(&self) -> String {
+        id_from_hash(self)
+    }
+
+    fn get_status(&self, _cfg: &HermitConfig, _quick: bool) -> Status {
+        match self.install_required() {
+            Ok(false) => Status::Ok(format!("{} is installed", self.name)),
+            Ok(true) => Status::NotOk(format!("{} is not installed", self.name)),
+            Err(e) => Status::Error(format!("Failed to check installation: {}", e)),
+        }
     }
 }
 

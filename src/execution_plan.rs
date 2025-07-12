@@ -6,22 +6,21 @@ use std::{
 
 use crate::{
     RequireTag,
-    action::{
-        Action, Actions, ArcAction, install::InstallAction, link::LinkAction, patch::PatchAction,
-    },
-    config::{FallbackOperation, GlobalConfig, Tag},
+    action::{Action, ArcAction},
+    config::{ArcHermitConfig, CliOptions, GlobalConfig, Tag},
     hermitgrab_error::{ActionError, ApplyError},
 };
+pub type ArcConfigAction = (ArcHermitConfig, ArcAction);
 pub struct ExecutionPlan {
-    pub actions: Vec<ArcAction>,
+    pub actions: Vec<ArcConfigAction>,
 }
 impl ExecutionPlan {
-    pub fn iter(&self) -> std::slice::Iter<'_, ArcAction> {
+    pub fn iter(&self) -> std::slice::Iter<'_, ArcConfigAction> {
         self.actions.iter()
     }
     pub fn filter_actions_by_tags(&self, active_tags: &BTreeSet<Tag>) -> ExecutionPlan {
-        let mut filtered: Vec<ArcAction> = Vec::new();
-        for action in self.actions.iter() {
+        let mut filtered: Vec<ArcConfigAction> = Vec::new();
+        for (cfg, action) in self.actions.iter() {
             let tags = action.requires();
             let mut matches = true;
             for tag in tags {
@@ -31,46 +30,59 @@ impl ExecutionPlan {
                 }
             }
             if matches {
-                filtered.push(action.clone());
+                filtered.push((cfg.clone(), action.clone()));
             }
         }
         ExecutionPlan { actions: filtered }
     }
 
     pub fn sort_by_requires(&self) -> ExecutionPlan {
+        use std::collections::HashMap;
         let mut sorted = Vec::new();
         let mut seen = HashSet::new();
+
+        // Build a lookup map from Tag to ArcConfigAction for fast dependency resolution
+        let mut tag_to_action: HashMap<Tag, &ArcConfigAction> = HashMap::new();
+        for action in &self.actions {
+            let (_, act) = action;
+            for tag in act.provides() {
+                tag_to_action.insert(tag.clone(), action);
+            }
+        }
+
         fn visit(
-            a: &ArcAction,
-            actions: &ExecutionPlan,
+            a: &ArcConfigAction,
+            tag_to_action: &HashMap<Tag, &ArcConfigAction>,
             seen: &mut HashSet<String>,
-            sorted: &mut Vec<ArcAction>,
+            sorted: &mut Vec<ArcConfigAction>,
         ) {
-            if seen.contains(&a.id()) {
+            let (cfg, a) = a;
+            let id = a.id();
+            if seen.contains(&id) {
                 return;
             }
-            seen.insert(a.id());
+            seen.insert(id);
             for dep in a.requires() {
                 let RequireTag::Positive(dep) = dep else {
                     // Skip negative dependencies
                     continue;
                 };
                 let tag = Tag::from_str(dep).unwrap();
-                if let Some(dep_a) = actions.iter().find(|x| x.provides_tag(&tag)) {
-                    visit(dep_a, actions, seen, sorted);
+                if let Some(dep_a) = tag_to_action.get(&tag) {
+                    visit(dep_a, tag_to_action, seen, sorted);
                 }
             }
-            sorted.push(a.clone());
+            sorted.push((cfg.clone(), a.clone()));
         }
         for a in self.actions.iter() {
-            visit(a, self, &mut seen, &mut sorted);
+            visit(a, &tag_to_action, &mut seen, &mut sorted);
         }
         ExecutionPlan { actions: sorted }
     }
 
     pub fn execute_actions(&self) -> Vec<(String, Result<(), ActionError>)> {
         let mut results = Vec::new();
-        for a in self.actions.iter() {
+        for (_, a) in self.actions.iter() {
             let res = a.execute();
             results.push((a.short_description(), res));
         }
@@ -79,8 +91,8 @@ impl ExecutionPlan {
 }
 
 impl<'a> IntoIterator for &'a ExecutionPlan {
-    type Item = &'a ArcAction;
-    type IntoIter = std::slice::Iter<'a, ArcAction>;
+    type Item = &'a ArcConfigAction;
+    type IntoIter = std::slice::Iter<'a, ArcConfigAction>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.actions.iter()
@@ -89,25 +101,14 @@ impl<'a> IntoIterator for &'a ExecutionPlan {
 
 pub fn create_execution_plan(
     global_config: &Arc<GlobalConfig>,
-    fallback: &Option<FallbackOperation>,
+    cli: &CliOptions,
 ) -> Result<ExecutionPlan, ApplyError> {
-    let mut actions: Vec<ArcAction> = Vec::new();
+    let mut actions: Vec<(ArcHermitConfig, ArcAction)> = Vec::new();
     for (_, cfg) in global_config.subconfigs() {
-        for link_config in &cfg.link {
-            actions.push(Arc::new(Actions::Link(LinkAction::new(
-                link_config,
-                cfg,
-                fallback,
-            ))));
-        }
-        for patch in &cfg.patch {
-            actions.push(Arc::new(Actions::Patch(PatchAction::new(patch, cfg))));
-        }
-        for install_entry in &cfg.install {
-            actions.push(Arc::new(Actions::Install(InstallAction::new(
-                install_entry,
-                cfg,
-            )?)));
+        for item in cfg.config_items() {
+            if let Ok(action) = item.as_action(cfg, cli) {
+                actions.push((cfg.clone(), action));
+            }
         }
     }
     Ok(ExecutionPlan { actions })
@@ -118,7 +119,11 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::{HermitConfig, LinkConfig, LinkType, config::FallbackOperation};
+    use crate::{
+        HermitConfig, LinkConfig, LinkType,
+        action::{Actions, install::InstallAction, link::LinkAction},
+        config::FallbackOperation,
+    };
 
     #[test]
     fn test_topology_sorting() {
@@ -166,13 +171,26 @@ mod tests {
             )
             .unwrap(),
         ));
-        let actions: Vec<ArcAction> = vec![install_action, link_action_a, link_action_b];
+        let cfg = Arc::new(cfg);
+        let install_action = (cfg.clone(), install_action);
+        let link_action_a = (cfg.clone(), link_action_a);
+        let link_action_b = (cfg.clone(), link_action_b);
+        let actions = vec![install_action, link_action_a, link_action_b];
         let plan = ExecutionPlan { actions };
         assert_eq!(plan.actions.len(), 3);
         let sorted_actions = plan.sort_by_requires();
         assert_eq!(sorted_actions.actions.len(), plan.actions.len());
-        assert_eq!(sorted_actions.actions[0].id(), "link:action_a");
-        assert_eq!(sorted_actions.actions[1].id(), "link:action_b");
-        assert_eq!(sorted_actions.actions[2].id(), "install:action");
+        assert_eq!(
+            sorted_actions.actions[0].1.id(),
+            "hermitgrab::action::link::LinkAction:15529825494567548860"
+        );
+        assert_eq!(
+            sorted_actions.actions[1].1.id(),
+            "hermitgrab::action::link::LinkAction:16720280782580869565"
+        );
+        assert_eq!(
+            sorted_actions.actions[2].1.id(),
+            "hermitgrab::action::install::InstallAction:13896253663299332899"
+        );
     }
 }

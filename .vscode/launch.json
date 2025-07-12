@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'hermitgrab'",
+            "name": "Apply karsten&k8s forced",
             "cargo": {
                 "args": [
                     "build",
@@ -21,10 +21,36 @@
             },
             "args": [
                 "apply",
+                "--profile=karsten",
+                "--hermit-dir=${workspaceFolder}/.hermitgrab",
+                "-yvF",
+                "-t",
+                "k8s"
             ],
-            "env": {
-                "HOME": "${workspaceFolder}/fake_home"
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Status karsten&k8s",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hermitgrab",
+                    "--package=hermitgrab"
+                ],
+                "filter": {
+                    "name": "hermitgrab",
+                    "kind": "bin"
+                }
             },
+            "args": [
+                "status",
+                "--profile=karsten",
+                "--hermit-dir=${workspaceFolder}/.hermitgrab",
+                "-t",
+                "k8s"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {

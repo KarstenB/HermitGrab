@@ -3,9 +3,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use enum_dispatch::enum_dispatch;
 
-use crate::RequireTag;
 use crate::config::Tag;
 use crate::hermitgrab_error::ActionError;
+use crate::{HermitConfig, RequireTag};
 pub mod install;
 pub mod link;
 pub mod patch;
@@ -65,8 +65,16 @@ impl IntoIterator for ActionOutput {
         }))
     }
 }
+
+pub enum Status {
+    Ok(String),
+    NotOk(String),
+    Error(String),
+    NotSupported,
+}
+
 #[enum_dispatch]
-pub trait Action: Send + Sync + Hash {
+pub trait Action: Send + Sync {
     fn short_description(&self) -> String;
     fn long_description(&self) -> String;
     fn get_output(&self) -> Option<ActionOutput> {
@@ -77,12 +85,15 @@ pub trait Action: Send + Sync + Hash {
     fn provides_tag(&self, tag: &Tag) -> bool {
         self.provides().iter().any(|t| t == tag)
     }
-    fn id(&self) -> String {
-        let mut hash = DefaultHasher::new();
-        self.hash(&mut hash);
-        format!("{}:{}", std::any::type_name::<Self>(), hash.finish())
-    }
+    fn id(&self) -> String;
     fn execute(&self) -> Result<(), ActionError>;
+    fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status;
+}
+
+pub fn id_from_hash<T: Hash>(item: &T) -> String {
+    let mut hash = DefaultHasher::new();
+    item.hash(&mut hash);
+    format!("{}:{}", std::any::type_name::<T>(), hash.finish())
 }
 
 #[enum_dispatch(Action)]

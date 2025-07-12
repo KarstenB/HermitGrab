@@ -1,4 +1,4 @@
-use crate::commands::Cli;
+use crate::commands::{Cli, Commands};
 use crate::config::{GlobalConfig, find_hermit_files};
 pub use crate::config::{HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag};
 pub use crate::hermitgrab_error::FileOpsError;
@@ -54,8 +54,14 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Error).env().init()?;
     let cli = Cli::parse();
+    let command = cli.command;
+    if !matches!(command, Commands::Ubi { .. }) {
+        simple_logger::SimpleLogger::new()
+            .with_level(log::LevelFilter::Error)
+            .env()
+            .init()?;
+    }
     let search_root = init_hermit_dir(&cli.hermit_dir);
     let yaml_files = find_hermit_files(&search_root);
     let home_dir = UserDirs::new()
@@ -63,7 +69,6 @@ async fn main() -> Result<()> {
         .home_dir()
         .to_path_buf();
     let global_config = GlobalConfig::from_paths(&search_root, &home_dir, &yaml_files)?;
-    let command = cli.command;
     let interactive = false;
     #[cfg(feature = "interactive")]
     let interactive = cli.interactive;

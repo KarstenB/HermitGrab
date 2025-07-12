@@ -1,8 +1,8 @@
 // cmd_apply_tui.rs
 // TUI for interactive apply using ratatui
 
-use crate::Cli;
 use crate::action::Action;
+use crate::config::CliOptions;
 use crate::config::{GlobalConfig, Tag};
 use crate::execution_plan::create_execution_plan;
 use crate::hermitgrab_error::ApplyError;
@@ -48,7 +48,7 @@ impl App {
         idx: usize,
         global_config: &Arc<GlobalConfig>,
     ) -> Result<(), ApplyError> {
-        if let Some(profile_tags) = global_config.all_profiles.get(&self.profiles[idx]) {
+        if let Ok(profile_tags) = global_config.get_tags_for_profile(&self.profiles[idx]) {
             for (tag, checked) in &mut self.tags {
                 if tag.is_detected() {
                     continue;
@@ -81,12 +81,12 @@ impl App {
             .iter()
             .filter_map(|(t, checked)| if *checked { Some(t.clone()) } else { None })
             .collect::<BTreeSet<Tag>>();
-        let actions = create_execution_plan(global_config)?;
+        let actions = create_execution_plan(global_config, &CliOptions::default())?;
         let filtered_actions = actions.filter_actions_by_tags(&active_tags);
         let sorted = filtered_actions.sort_by_requires();
         self.execution_plan = sorted
             .iter()
-            .map(|a| (a.short_description(), false))
+            .map(|(_, a)| (a.short_description(), false))
             .collect::<Vec<_>>();
         Ok(())
     }
@@ -120,15 +120,15 @@ pub fn run_tui(
     profile: &Option<String>,
 ) -> Result<(), ApplyError> {
     // Collect all profiles and tags from GlobalConfig
-    let actions = create_execution_plan(global_config)?;
+    let actions = create_execution_plan(global_config, &CliOptions::default())?;
     let mut all_tags = global_config
-        .all_provided_tags
+        .all_provided_tags()
         .iter()
         .map(|t| (t.clone(), true))
         .collect::<Vec<_>>();
     all_tags.extend(
         global_config
-            .all_detected_tags
+            .all_detected_tags()
             .iter()
             .map(|t| (t.clone(), true)),
     );
@@ -152,9 +152,9 @@ pub fn run_tui(
 
     let mut app = App {
         profiles: global_config
-            .all_profiles
-            .keys()
-            .cloned()
+            .all_profiles()
+            .into_iter()
+            .map(|(t, _)| t.clone())
             .collect::<Vec<_>>(),
         tags: all_tags
             .into_iter()
@@ -165,7 +165,7 @@ pub fn run_tui(
             .collect(),
         execution_plan: sorted
             .iter()
-            .map(|a| (a.short_description(), false))
+            .map(|(_, a)| (a.short_description(), false))
             .collect(),
         show_execution: false,
         progress: 0,

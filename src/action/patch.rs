@@ -5,8 +5,8 @@ use jsonc_parser::ParseOptions;
 
 use crate::{
     HermitConfig, RequireTag,
-    action::{Action, ActionOutput},
-    config::{PatchConfig, PatchType, Tag},
+    action::{Action, ActionOutput, Status, id_from_hash},
+    config::{ConfigItem, PatchConfig, PatchType, Tag},
     hermitgrab_error::{ActionError, PatchActionError},
 };
 
@@ -32,8 +32,8 @@ impl PatchAction {
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
-        let provides = patch.get_provides(cfg);
-        let requires = patch.get_requires(cfg);
+        let provides = patch.get_all_provides(cfg);
+        let requires = patch.get_all_requires(cfg);
         Self {
             src,
             rel_src,
@@ -78,6 +78,12 @@ impl Action for PatchAction {
                 Ok(())
             }
         }
+    }
+    fn id(&self) -> String {
+        id_from_hash(self)
+    }
+    fn get_status(&self, _cfg: &HermitConfig, _quick: bool) -> Status {
+        Status::NotSupported
     }
 }
 

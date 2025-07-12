@@ -42,10 +42,19 @@ pub enum ConfigError {
     RenderError(#[from] handlebars::RenderError),
     #[error("Failed to find source: {0}")]
     InstallSourceNotFound(String),
+    #[error("Hermit configuration is not an action")]
+    HermitConfigNotAction,
+    #[error("The tag {0} was not found in the configuration")]
+    TagNotFound(String),
 }
 
 #[derive(Debug, Error)]
-pub enum StatusError {}
+pub enum StatusError {
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
+    #[error(transparent)]
+    ApplyError(#[from] ApplyError),
+}
 
 #[derive(Debug, Error)]
 pub enum PatchActionError {
