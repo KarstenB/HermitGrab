@@ -1,0 +1,41 @@
+{
+  "cargo/hermit.toml": {
+    "provides": [
+      "cargo"
+    ],
+    "patch": [
+      {
+        "source": "patch.toml",
+        "target": "~/.cargo/config.toml",
+        "type": "JsonMerge"
+      }
+    ]
+  },
+  "hermit.toml": {
+    "profiles": {
+      "testProfile": [
+        "hello",
+        "test1"
+      ]
+    }
+  },
+  "test1/hermit.toml": {
+    "provides": [
+      "test1"
+    ],
+    "link": [
+      {
+        "source": "testfile.txt",
+        "target": "~/testfile.txt"
+      },
+      {
+        "source": "anotherfile.txt",
+        "target": "~/anotherfile.txt",
+        "requires": [
+          "-another"
+        ],
+        "fallback": "BackupOverwrite"
+      }
+    ]
+  }
+}

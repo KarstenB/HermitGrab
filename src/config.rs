@@ -319,12 +319,30 @@ impl FromStr for LinkType {
         }
     }
 }
+
 impl Display for LinkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LinkType::Soft => write!(f, "soft"),
             LinkType::Hard => write!(f, "hard"),
             LinkType::Copy => write!(f, "copy"),
+        }
+    }
+}
+
+impl ValueEnum for PatchType {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[PatchType::JsonMerge, PatchType::JsonPatch]
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        match self {
+            PatchType::JsonMerge => {
+                Some(PossibleValue::new("JsonMerge").aliases(["jsonmerge", "merge"]))
+            }
+            PatchType::JsonPatch => {
+                Some(PossibleValue::new("JsonPatch").aliases(["jsonpatch", "patch"]))
+            }
         }
     }
 }

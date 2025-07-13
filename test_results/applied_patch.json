@@ -1,0 +1,25 @@
+{
+  "actions": {
+    "PatchAction:patch.toml:.cargo/config.toml:cargo:+cargo": {
+      "Patch": {
+        "dst": "TEMP_DIR/.cargo/config.toml",
+        "patch_type": "JsonMerge",
+        "provides": [
+          "cargo"
+        ],
+        "requires": [
+          "+cargo"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/cargo/patch.toml"
+      }
+    }
+  },
+  "results": {
+    "PatchAction:patch.toml:.cargo/config.toml:cargo:+cargo": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "JsonMerge .cargo/config.toml with patch.toml"
+    }
+  }
+}

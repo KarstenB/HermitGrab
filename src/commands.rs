@@ -9,7 +9,7 @@ use git2::Repository;
 
 use crate::{
     LinkType, RequireTag,
-    config::{CliOptions, FallbackOperation, GlobalConfig, Tag},
+    config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Tag},
     detector,
 };
 use crate::{hermitgrab_info, info};
@@ -81,7 +81,7 @@ pub enum AddCommand {
         config_dir: PathBuf,
         /// Tags this config provides
         #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 1..)]
-        tags: Vec<Tag>,
+        provided_tags: Vec<Tag>,
         /// Tags this config requires for all of its links and other actions
         #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
@@ -89,6 +89,7 @@ pub enum AddCommand {
     /// Add a new Link to the config
     Link {
         /// Source file or directory to link
+        #[arg(value_hint = clap::ValueHint::FilePath)]
         source: PathBuf,
         /// Subdirectory of the hermit.toml file to add the link to
         #[arg(long)]
@@ -96,19 +97,41 @@ pub enum AddCommand {
         /// Link type to use
         #[arg(short = 'l', long, default_value = "soft", value_enum)]
         link_type: LinkType,
-        /// Destination path for the link, if not specified, uses the source name
-        #[arg(short = 'd', long)]
-        destination: Option<String>,
+        /// Target path for the link, if not specified, uses the source name
+        #[arg(short = 't', long)]
+        target: Option<PathBuf>,
         /// Required tags to include in the link (can be specified multiple times).
         /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
-        #[arg(short = 't', long = "tag", value_name = "TAG", num_args = 0..)]
+        #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
-        /// Provided tags in case a new config file will be created, i.e. destination does not yet exist.
-        #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 0..)]
+        /// Provided tags in case a new config file will be created, i.e. target does not yet exist.
+        #[arg(long = "provides", value_name = "TAG", num_args = 0..)]
         provided_tags: Vec<Tag>,
-        /// Fallback strategy in case the destination already exists
+        /// Fallback strategy in case the target already exists
         #[arg(short = 'f', long, default_value = "abort", value_enum)]
         fallback: FallbackOperation,
+    },
+    /// Add a new Link to the config
+    Patch {
+        /// Source file to patch
+        #[arg(value_hint = clap::ValueHint::FilePath)]
+        source: PathBuf,
+        /// Subdirectory of the hermit.toml file to add the Patch to
+        #[arg(long)]
+        config_dir: Option<PathBuf>,
+        /// Patch type to use
+        #[arg(short = 'p', long, default_value = "JsonMerge", value_enum)]
+        patch_type: PatchType,
+        /// Target path for the patch, if not specified, uses the source name
+        #[arg(short = 't', long, value_hint = clap::ValueHint::FilePath)]
+        target: Option<PathBuf>,
+        /// Required tags to include in the link (can be specified multiple times).
+        /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
+        #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
+        required_tags: Vec<RequireTag>,
+        /// Provided tags in case a new config file will be created, i.e. target does not yet exist.
+        #[arg(long = "provides", value_name = "TAG", num_args = 0..)]
+        provided_tags: Vec<Tag>,
     },
     /// Add a new profile to the config
     Profile {
@@ -276,16 +299,24 @@ pub async fn execute(
         Commands::Add { add_command } => match add_command {
             AddCommand::Config {
                 ref config_dir,
-                ref tags,
+                provided_tags: ref tags,
                 ref required_tags,
             } => {
-                cmd_add::add_config(config_dir, tags, required_tags, &[], &[], &global_config)?;
+                cmd_add::add_config(
+                    config_dir,
+                    tags,
+                    required_tags,
+                    &[],
+                    &[],
+                    &[],
+                    &global_config,
+                )?;
             }
             AddCommand::Link {
                 ref config_dir,
                 ref source,
                 ref link_type,
-                ref destination,
+                ref target,
                 ref required_tags,
                 ref provided_tags,
                 ref fallback,
@@ -294,10 +325,28 @@ pub async fn execute(
                     config_dir,
                     source,
                     link_type,
-                    destination,
+                    target,
                     required_tags,
                     provided_tags,
                     fallback,
+                    &global_config,
+                )?;
+            }
+            AddCommand::Patch {
+                ref config_dir,
+                ref source,
+                ref patch_type,
+                ref target,
+                ref required_tags,
+                ref provided_tags,
+            } => {
+                cmd_add::add_patch(
+                    config_dir,
+                    source,
+                    patch_type,
+                    target,
+                    required_tags,
+                    provided_tags,
                     &global_config,
                 )?;
             }

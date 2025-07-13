@@ -1,0 +1,41 @@
+{
+  "actions": {
+    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:test1:+test1,-another": {
+      "Link": {
+        "dst": "TEMP_DIR/anotherfile.txt",
+        "fallback": "BackupOverwrite",
+        "link_type": "soft",
+        "provides": [
+          "test1"
+        ],
+        "requires": [
+          "+test1",
+          "-another"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/test1/anotherfile.txt"
+      }
+    },
+    "LinkAction:testfile.txt:testfile.txt:soft:abort:test1:+test1": {
+      "Link": {
+        "dst": "TEMP_DIR/testfile.txt",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "provides": [
+          "test1"
+        ],
+        "requires": [
+          "+test1"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/test1/testfile.txt"
+      }
+    }
+  },
+  "results": {
+    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:test1:+test1,-another": {
+      "NotOk": "anotherfile.txt has issues: The destination \"TEMP_DIR/anotherfile.txt\" is not a symlink to the expected source"
+    },
+    "LinkAction:testfile.txt:testfile.txt:soft:abort:test1:+test1": {
+      "NotOk": "testfile.txt has issues: The destination \"TEMP_DIR/testfile.txt\" is not a symlink to the expected source"
+    }
+  }
+}

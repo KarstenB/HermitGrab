@@ -12,12 +12,30 @@ export RUST_LOG=error
 function hg_config_equals() {
     local expected="$GIT_ROOT/test_results/$1"
     local actual="${expected/.json/_actual.json}"
-    $HG get config --json "$actual"
+    $HG get config --json "$actual" > /dev/null
     if diff "$expected" "$actual"; then
         echo -e "${GREEN}No diff detected in config${NC}"
+        return 0
     else
-        echo -e "${RED}File does not exist: $file${NC}"
-        exit 3
+        echo -e "${RED}File differs: $file${NC}"
+        return 1
+    fi
+}
+
+function file_equals() {
+    local expected="$GIT_ROOT/test_results/$1"
+    local filename="$1"
+    local base="${filename%.*}"
+    local ext="${filename##*.}"
+    local new_filename="${base}_actual.${ext}"
+    local actual="$GIT_ROOT/test_results/$new_filename"
+    cp "$TEMP_DIR/$2" "$actual"
+    if diff "$expected" "$actual"; then
+        echo -e "${GREEN}No diff detected in $base${NC}"
+        return 0
+    else
+        echo -e "${RED}File differs: $file${NC}"
+        return 8
     fi
 }
 
@@ -30,9 +48,10 @@ function hg_exec_json_equals() {
     sed -i "s#${TEMP_DIR}#TEMP_DIR#g" "$actual"
     if diff "$expected" "$actual"; then
         echo -e "${GREEN}No diff detected in config${NC}"
+        return 0
     else
-        echo -e "${RED}File does not exist: $file${NC}"
-        exit 3
+        echo -e "${RED}File differs: $file${NC}"
+        return 2
     fi
 }
 
@@ -43,7 +62,7 @@ function hg_file_exists() {
         return 0
     else
         echo -e "${RED}File does not exist: $file${NC}"
-        return 1
+        return 3
     fi
 }
 
@@ -54,7 +73,7 @@ function file_exists() {
         return 0
     else
         echo -e "${RED}File does not exist: $file${NC}"
-        return 1
+        return 4
     fi
 }
 
@@ -68,7 +87,7 @@ function exec_contains() {
         return 0
     else
         echo -e "${RED}Command output does not contain: $content${NC}"
-        return 2
+        return 5
     fi
 }
 
@@ -81,11 +100,11 @@ function hg_is_symlinked() {
             return 0
         else
             echo -e "${RED}Symlink $link does not point to $target${NC}"
-            return 1
+            return 6
         fi
     else
         echo -e "${RED}$link is not a symlink${NC}"
-        return 2
+        return 7
     fi
 }
 
@@ -112,9 +131,11 @@ hg_config_equals "add_testfile_link.json"
 
 echo "Adding another file to the same config directory"
 echo "Another test file content" > "$TEMP_DIR/anotherfile.txt"
-$HG add link ~/anotherfile.txt --config-dir "test1" --fallback "backupoverwrite" -t '~another'
+$HG add link ~/anotherfile.txt --config-dir "test1" --fallback "backupoverwrite" -r '~another'
 hg_file_exists "test1/anotherfile.txt"
 hg_config_equals "add_anotherfile_link.json"
+
+hg_exec_json_equals unlinked_status.json "$HG" status --tag test1
 
 echo "Add a profile with a tag"
 $HG add profile testProfile --tag hello --tag test1
@@ -134,3 +155,18 @@ file_exists "$HOME/anotherfile.txt.bak"
 file_exists "$HOME/testfile.txt.bak"
 hg_is_symlinked "test1/anotherfile.txt" "anotherfile.txt"
 hg_is_symlinked "test1/testfile.txt" "testfile.txt"
+
+hg_exec_json_equals linked_status.json "$HG" status --profile testProfile
+
+echo '[alias]
+"fa" = "format --all"' > "$HOME/patch.toml"
+mkdir -p "$HOME/.cargo"
+echo '[alias]
+"ntr" = "nextest run"' > "$HOME/.cargo/config.toml"
+$HG add patch "$HOME/patch.toml" -t "$HOME/.cargo/config.toml" --config-dir "cargo" --provides "cargo"
+hg_config_equals "add_patch.json"
+hg_file_exists "cargo/hermit.toml"
+hg_file_exists "cargo/patch.toml"
+
+hg_exec_json_equals applied_patch.json "$HG" apply -y -t cargo
+file_equals "patched_config.toml" ".cargo/config.toml"

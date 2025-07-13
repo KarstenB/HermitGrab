@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use serde::Serialize;
 use std::{
     collections::BTreeSet,
     iter::FromIterator,
@@ -11,8 +12,8 @@ use crate::{
     HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice,
     common_cli::{hint, prompt},
     config::{
-        CONF_FILE_NAME, FallbackOperation, GlobalConfig, Source::CommandLine, Tag,
-        load_hermit_config_editable,
+        CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType,
+        Source::CommandLine, Tag, load_hermit_config_editable,
     },
     error,
     file_ops::copy,
@@ -24,7 +25,8 @@ pub fn add_config(
     config_dir: &Path,
     provided_tags: &[Tag],
     required_tags: &[RequireTag],
-    files: &[LinkConfig],
+    links: &[LinkConfig],
+    patches: &[PatchConfig],
     installs: &[InstallConfig],
     global_config: &Arc<GlobalConfig>,
 ) -> Result<(), AddError> {
@@ -57,7 +59,8 @@ pub fn add_config(
     };
     config.provides.extend(provided_tags);
     config.requires.extend(required_tags.to_vec());
-    config.link.extend(files.to_vec());
+    config.link.extend(links.to_vec());
+    config.patch.extend(patches.to_vec());
     config.install.extend(installs.to_vec());
     std::fs::create_dir_all(config_dir)?;
     config.save_to_file(&config_file)?;
@@ -77,17 +80,16 @@ fn prompt_for_provides() -> Result<Vec<Tag>, AddError> {
         .collect())
 }
 
-pub fn add_link(
+pub fn add_patch(
     config_dir: &Option<PathBuf>,
     source: &Path,
-    link_type: &LinkType,
-    destination: &Option<String>,
+    patch_type: &PatchType,
+    target: &Option<PathBuf>,
     required_tags: &[RequireTag],
     provided_tags: &[Tag],
-    fallback: &FallbackOperation,
     global_config: &Arc<GlobalConfig>,
 ) -> Result<(), AddError> {
-    let target_dir = if let Some(target_dir) = config_dir {
+    let config_dir = if let Some(target_dir) = config_dir {
         let new_target = PathBuf::from(target_dir);
         if new_target.is_absolute() {
             new_target
@@ -95,100 +97,63 @@ pub fn add_link(
             global_config.hermit_dir().join(new_target)
         }
     } else {
-        let absolute_source = source.canonicalize().unwrap_or(source.to_path_buf());
-        if absolute_source.is_file() {
-            info!(
-                "This will add a link for the file: {}",
-                absolute_source.display()
-            );
-        } else if absolute_source.is_dir() {
-            info!(
-                "This will add a link for the directory: {}",
-                absolute_source.display()
-            );
-        } else {
-            return Err(AddError::SourceNotFound(absolute_source));
-        }
-        hint(
-            "To avoid being prompted about the directory, you can use the --target-dir command line option",
-        );
-        let relative_source = absolute_source
-            .strip_prefix(global_config.home_dir())
-            .unwrap_or(&absolute_source);
-        let last_segment_from_absolute = if absolute_source.is_dir() {
-            absolute_source
-                .file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or("")
-        } else {
-            absolute_source
-                .parent()
-                .and_then(|p| p.file_name().and_then(|f| f.to_str()))
-                .unwrap_or("")
-        };
-        let deep_config_file = global_config
-            .hermit_dir()
-            .join(relative_source.parent().unwrap_or(relative_source))
-            .join(CONF_FILE_NAME);
-        let deep_config_display_path = deep_config_file
-            .strip_prefix(global_config.hermit_dir())
-            .unwrap_or(&deep_config_file)
-            .display();
-        let simple_config_file = global_config
-            .hermit_dir()
-            .join(last_segment_from_absolute)
-            .join(CONF_FILE_NAME);
-        let simple_config_display_path = simple_config_file
-            .strip_prefix(global_config.hermit_dir())
-            .unwrap_or(&simple_config_file)
-            .display();
-        if simple_config_file.exists() {
-            choice!(
-                "1. Add to existing config file: '{}'",
-                simple_config_display_path
-            );
-        } else {
-            choice!(
-                "1. Create new config file: '{}'",
-                simple_config_display_path
-            );
-        }
-        if deep_config_file.exists() {
-            choice!(
-                "2. Add to existing config file: '{}'",
-                deep_config_display_path
-            );
-        } else {
-            choice!("2. Create new config file: '{}'", deep_config_display_path);
-        }
-        choice!("3. Use custom directory");
-        choice!("4. Use the root HermitGrab directory");
-        let choice = prompt("What do you want to do? Enter either 1, 2, 3 or 4: ")?;
-        match choice.as_str() {
-            "1" => simple_config_file.parent().unwrap().to_path_buf(),
-            "2" => deep_config_file.parent().unwrap().to_path_buf(),
-            "3" => {
-                let custom_dir = prompt("Enter custom directory path: ")?;
-                PathBuf::from(custom_dir)
-            }
-            "4" => global_config.hermit_dir().into(),
-            _ => return Err(AddError::InvalidChoice),
-        }
+        get_config_dir_interactive(source, global_config)?
     };
-    let config_file = target_dir.join(CONF_FILE_NAME);
-    let target = if let Some(destination) = destination {
-        let path = PathBuf::from(destination);
-        path.strip_prefix(global_config.home_dir())
-            .map(|x| x.to_path_buf())
-            .unwrap_or(path)
+    let config_file = config_dir.join(CONF_FILE_NAME);
+    let target = normalize_target(source, target, global_config)?;
+    let source_filename: PathBuf = source
+        .file_name()
+        .ok_or(AddError::FileNameError)?
+        .to_string_lossy()
+        .to_string()
+        .into();
+    let file_entry = PatchConfig {
+        source: source_filename.clone(),
+        target,
+        patch_type: patch_type.clone(),
+        requires: BTreeSet::from_iter(required_tags.iter().cloned()),
+        provides: BTreeSet::new(),
+    };
+    if config_file.exists() {
+        insert_into_existing(&config_file, &file_entry)?;
     } else {
-        source.strip_prefix(global_config.home_dir())?.to_path_buf()
-    };
-    let target = if target.is_absolute() {
-        target
+        add_config(
+            &config_dir,
+            provided_tags,
+            &[],
+            &[],
+            &[file_entry],
+            &[],
+            global_config,
+        )?;
+    }
+    copy(source, config_dir.join(source_filename).as_path())?;
+    crate::success!("Added new patch to {config_file:?}");
+    Ok(())
+}
+
+pub fn add_link(
+    config_dir: &Option<PathBuf>,
+    source: &Path,
+    link_type: &LinkType,
+    target: &Option<PathBuf>,
+    required_tags: &[RequireTag],
+    provided_tags: &[Tag],
+    fallback: &FallbackOperation,
+    global_config: &Arc<GlobalConfig>,
+) -> Result<(), AddError> {
+    let config_dir = if let Some(target_dir) = config_dir {
+        let new_target = PathBuf::from(target_dir);
+        if new_target.is_absolute() {
+            new_target
+        } else {
+            global_config.hermit_dir().join(new_target)
+        }
     } else {
-        PathBuf::from("~").join(target)
+        get_config_dir_interactive(source, global_config)?
     };
+    let config_file = config_dir.join(CONF_FILE_NAME);
+    let target = normalize_target(source, target, global_config)?;
     let source_filename: PathBuf = source
         .file_name()
         .ok_or(AddError::FileNameError)?
@@ -207,23 +172,166 @@ pub fn add_link(
         insert_into_existing(&config_file, &file_entry)?;
     } else {
         add_config(
-            &target_dir,
+            &config_dir,
             provided_tags,
             &[],
             &[file_entry],
             &[],
+            &[],
             global_config,
         )?;
     }
-    copy(source, target_dir.join(source_filename).as_path())?;
+    copy(source, config_dir.join(source_filename).as_path())?;
     crate::success!("Added new link to {config_file:?}");
     Ok(())
 }
 
-fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Result<(), AddError> {
+fn normalize_target(
+    source: &Path,
+    target: &Option<PathBuf>,
+    global_config: &Arc<GlobalConfig>,
+) -> Result<PathBuf, AddError> {
+    let target = if let Some(target) = target {
+        let path = PathBuf::from(target);
+        path.strip_prefix(global_config.home_dir())
+            .map(|x| x.to_path_buf())
+            .unwrap_or(path)
+    } else {
+        source.strip_prefix(global_config.home_dir())?.to_path_buf()
+    };
+    let target = if target.is_absolute() {
+        target
+    } else {
+        PathBuf::from("~").join(target)
+    };
+    Ok(target)
+}
+
+fn get_config_dir_interactive(
+    source: &Path,
+    global_config: &Arc<GlobalConfig>,
+) -> Result<PathBuf, AddError> {
+    let absolute_source = source.canonicalize().unwrap_or(source.to_path_buf());
+    if absolute_source.is_file() {
+        info!(
+            "This will add a link for the file: {}",
+            absolute_source.display()
+        );
+    } else if absolute_source.is_dir() {
+        info!(
+            "This will add a link for the directory: {}",
+            absolute_source.display()
+        );
+    } else {
+        return Err(AddError::SourceNotFound(absolute_source));
+    }
+    hint(
+        "To avoid being prompted about the directory, you can use the --config-dir command line option",
+    );
+    let relative_source = absolute_source
+        .strip_prefix(global_config.home_dir())
+        .unwrap_or(&absolute_source);
+    let last_segment_from_absolute = if absolute_source.is_dir() {
+        absolute_source
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("")
+    } else {
+        absolute_source
+            .parent()
+            .and_then(|p| p.file_name().and_then(|f| f.to_str()))
+            .unwrap_or("")
+    };
+    let deep_config_file = global_config
+        .hermit_dir()
+        .join(relative_source.parent().unwrap_or(relative_source))
+        .join(CONF_FILE_NAME);
+    let deep_config_display_path = deep_config_file
+        .strip_prefix(global_config.hermit_dir())
+        .unwrap_or(&deep_config_file)
+        .display();
+    let simple_config_file = global_config
+        .hermit_dir()
+        .join(last_segment_from_absolute)
+        .join(CONF_FILE_NAME);
+    let simple_config_display_path = simple_config_file
+        .strip_prefix(global_config.hermit_dir())
+        .unwrap_or(&simple_config_file)
+        .display();
+    if simple_config_file.exists() {
+        choice!(
+            "1. Add to existing config file: '{}'",
+            simple_config_display_path
+        );
+    } else {
+        choice!(
+            "1. Create new config file: '{}'",
+            simple_config_display_path
+        );
+    }
+    if deep_config_file.exists() {
+        choice!(
+            "2. Add to existing config file: '{}'",
+            deep_config_display_path
+        );
+    } else {
+        choice!("2. Create new config file: '{}'", deep_config_display_path);
+    }
+    choice!("3. Use custom directory");
+    choice!("4. Use the root HermitGrab directory");
+    let choice = prompt("What do you want to do? Enter either 1, 2, 3 or 4: ")?;
+    Ok(match choice.as_str() {
+        "1" => simple_config_file.parent().unwrap().to_path_buf(),
+        "2" => deep_config_file.parent().unwrap().to_path_buf(),
+        "3" => {
+            let custom_dir = prompt("Enter custom directory path: ")?;
+            PathBuf::from(custom_dir)
+        }
+        "4" => global_config.hermit_dir().into(),
+        _ => return Err(AddError::InvalidChoice),
+    })
+}
+
+trait GetSourceAndTarget<'a> {
+    fn source(&'a self) -> &'a Path;
+    fn target(&'a self) -> &'a Path;
+    fn entry_name(&self) -> &'static str;
+}
+
+impl<'a> GetSourceAndTarget<'a> for LinkConfig {
+    fn source(&'a self) -> &'a Path {
+        &self.source
+    }
+
+    fn target(&'a self) -> &'a Path {
+        &self.target
+    }
+    fn entry_name(&self) -> &'static str {
+        "link"
+    }
+}
+impl<'a> GetSourceAndTarget<'a> for PatchConfig {
+    fn source(&'a self) -> &'a Path {
+        &self.source
+    }
+
+    fn target(&'a self) -> &'a Path {
+        &self.target
+    }
+
+    fn entry_name(&self) -> &'static str {
+        "patch"
+    }
+}
+
+fn insert_into_existing<'a, T: Serialize + GetSourceAndTarget<'a>>(
+    config_file: &PathBuf,
+    file_entry: &'a T,
+) -> Result<(), AddError> {
+    let entry_name = file_entry.entry_name();
     let table = to_table(file_entry)?;
     let mut config = load_hermit_config_editable(config_file)?;
-    let files = config["link"].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
+    let files = config[entry_name].or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
     match files {
         Item::ArrayOfTables(arr) => {
             for entry in arr.iter() {
@@ -235,20 +343,22 @@ fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Resul
                 };
                 let source_str = PathBuf::from(source.value());
                 let target_str = PathBuf::from(target.value());
-                if source_str == file_entry.source && target_str == file_entry.target {
+                if source_str == file_entry.source() && target_str == file_entry.target() {
                     error!(
-                        "The [[link]] table already contains an entry with the same source {} and target {}",
+                        "The {entry_name} table already contains an entry with the same source {} and target {}",
                         source_str.display(),
                         target_str.display()
                     );
-                    return Err(AddError::SourceAlreadyExists(file_entry.source.clone()));
+                    return Err(AddError::SourceAlreadyExists(
+                        file_entry.source().to_path_buf(),
+                    ));
                 }
             }
             arr.push(table);
         }
         i => {
             return Err(AddError::ExpectedTable(
-                "link".to_string(),
+                entry_name.to_string(),
                 i.type_name().to_string(),
             ));
         }
@@ -258,7 +368,7 @@ fn insert_into_existing(config_file: &PathBuf, file_entry: &LinkConfig) -> Resul
     Ok(())
 }
 
-fn to_table(file_entry: &LinkConfig) -> Result<toml_edit::Table, AddError> {
+fn to_table<T: Serialize>(file_entry: &T) -> Result<toml_edit::Table, AddError> {
     let value =
         serde::Serialize::serialize(file_entry, toml_edit::ser::ValueSerializer::new()).unwrap();
     let item: Item = value.into();
