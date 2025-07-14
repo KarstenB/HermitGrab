@@ -188,17 +188,3 @@ pub fn create_local_repo(global_config: &Arc<GlobalConfig>) -> Result<(), Discov
     info!("You can now add your dotfiles to this directory and commit them.");
     Ok(())
 }
-
-pub async fn discover_repo_with_gitlab(
-    _create: bool,
-    _token: Option<String>,
-) -> Result<(), DiscoverError> {
-    todo!()
-}
-
-pub async fn discover_repo_with_azure_devops(
-    _create: bool,
-    _token: Option<String>,
-) -> Result<(), DiscoverError> {
-    todo!()
-}

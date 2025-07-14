@@ -1,7 +1,7 @@
 use crate::commands::{Cli, Commands};
 use crate::config::{GlobalConfig, find_hermit_files};
-pub use crate::config::{HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag};
-pub use crate::hermitgrab_error::FileOpsError;
+use crate::config::{HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag};
+use crate::hermitgrab_error::FileOpsError;
 use crate::{
     common_cli::{hermitgrab_info, info},
     config::CONF_FILE_NAME,
@@ -9,19 +9,18 @@ use crate::{
 use anyhow::Result;
 use clap::Parser;
 use directories::UserDirs;
-pub use std::collections::HashSet;
 use std::path::PathBuf;
-pub use std::sync::Arc;
 
-pub mod action;
-pub mod commands;
-pub mod common_cli;
-pub mod config;
-pub mod detector;
-pub mod execution_plan;
-pub mod file_ops;
-pub mod hermitgrab_error;
-pub mod integrations;
+mod action;
+mod build_doc;
+mod commands;
+mod common_cli;
+mod config;
+mod detector;
+mod execution_plan;
+mod file_ops;
+mod hermitgrab_error;
+mod integrations;
 
 fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
     if let Some(path) = cli_path {
@@ -54,6 +53,10 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if std::env::var("BUILD_DOC").is_ok() {
+        build_doc::build_doc();
+        return Ok(());
+    }
     let cli = Cli::parse();
     let command = cli.command;
     if !matches!(command, Commands::Ubi { .. }) {

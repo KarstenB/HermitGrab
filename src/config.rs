@@ -243,9 +243,9 @@ impl HermitConfig {
 
     pub fn save_to_file(&self, conf_file_name: &PathBuf) -> Result<(), ConfigError> {
         let content = toml::to_string(self)
-            .map_err(|e| ConfigError::SerializeTomlError(e, conf_file_name.clone()))?;
+            .map_err(|e| ConfigError::SerializeToml(e, conf_file_name.clone()))?;
         std::fs::write(conf_file_name, content)
-            .map_err(|e| ConfigError::IoError(e, conf_file_name.clone()))?;
+            .map_err(|e| ConfigError::Io(e, conf_file_name.clone()))?;
         Ok(())
     }
 
@@ -853,7 +853,7 @@ impl GlobalConfig {
         let template = shellexpand::tilde(cmd).to_string();
         let cmd = reg
             .render_template(&template, &data)
-            .map_err(ConfigError::RenderError)?;
+            .map_err(ConfigError::Render)?;
         Ok(cmd)
     }
 
@@ -894,9 +894,9 @@ pub fn load_hermit_config<P: AsRef<Path>>(
     global_config: Weak<GlobalConfig>,
 ) -> Result<Arc<HermitConfig>, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| ConfigError::IoError(e, path.as_ref().to_path_buf()))?;
+        .map_err(|e| ConfigError::Io(e, path.as_ref().to_path_buf()))?;
     let mut config: HermitConfig = toml::from_str(&content)
-        .map_err(|e| ConfigError::DeserializeTomlError(e, path.as_ref().to_path_buf()))?;
+        .map_err(|e| ConfigError::DeserializeToml(e, path.as_ref().to_path_buf()))?;
     config.path = path.as_ref().to_path_buf();
     config.global_cfg = global_config;
     Ok(Arc::new(config))
@@ -904,10 +904,10 @@ pub fn load_hermit_config<P: AsRef<Path>>(
 
 pub fn load_hermit_config_editable<P: AsRef<Path>>(path: P) -> Result<DocumentMut, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| ConfigError::IoError(e, path.as_ref().to_path_buf()))?;
+        .map_err(|e| ConfigError::Io(e, path.as_ref().to_path_buf()))?;
     content
         .parse::<DocumentMut>()
-        .map_err(|e| ConfigError::DeserializeDocumentTomlError(e, path.as_ref().to_path_buf()))
+        .map_err(|e| ConfigError::DeserializeDocumentToml(e, path.as_ref().to_path_buf()))
 }
 
 pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {

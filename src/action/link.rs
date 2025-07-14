@@ -143,7 +143,7 @@ impl Action for LinkAction {
     }
     fn execute(&self) -> Result<(), ActionError> {
         link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
-            .map_err(LinkActionError::AtomicLinkError)?;
+            .map_err(LinkActionError::FileOps)?;
         Ok(())
     }
     fn id(&self) -> String {

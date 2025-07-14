@@ -50,17 +50,9 @@ pub struct Cli {
     /// Increase output verbosity
     #[arg(short = 'v', long, env = "HERMIT_VERBOSE", global = true)]
     pub verbose: bool,
+    /// Don't ask for confirmation, assume yes is the answer
     #[arg(short = 'y', long, env = "HERMIT_CONFIRM", global = true)]
     pub confirm: bool,
-    #[arg(
-        long,
-        env = "HERMIT_JSON",
-        global = true,
-        value_name = "PATH",
-        value_hint = clap::ValueHint::FilePath,
-        hide = true,
-    )]
-    pub json: Option<PathBuf>,
     /// Path to the hermitgrab config directory
     /// If not set, defaults to ~/.hermitgrab
     #[arg(
@@ -72,6 +64,15 @@ pub struct Cli {
         value_hint = clap::ValueHint::DirPath,
     )]
     pub hermit_dir: Option<PathBuf>,
+    #[arg(
+        long,
+        env = "HERMIT_JSON",
+        global = true,
+        value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath,
+        hide = true,
+    )]
+    pub json: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -79,7 +80,7 @@ pub enum AddCommand {
     Config {
         /// Subdirectory of the hermit.toml file to add the target directory to
         config_dir: PathBuf,
-        /// Tags this config provides
+        /// Tags this config provides. If empty assumes the last path segment as tag
         #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 1..)]
         provided_tags: Vec<Tag>,
         /// Tags this config requires for all of its links and other actions
@@ -156,17 +157,8 @@ pub enum GetCommand {
 pub enum Provider {
     /// Use GitHub as the provider
     GitHub {
+        /// A Github Token to use instead of the device authentication
         #[arg(long, env = "HERMIT_GITHUB_TOKEN")]
-        token: Option<String>,
-    },
-    /// Use GitLab as the provider
-    GitLab {
-        #[arg(long, env = "HERMIT_GITLAB_TOKEN")]
-        token: Option<String>,
-    },
-    /// Use AzureDevOps as the provider
-    AzureDevOps {
-        #[arg(long, env = "HERMIT_AZURE_DEVOPS_TOKEN")]
         token: Option<String>,
     },
 }
@@ -178,7 +170,7 @@ pub enum InitCommand {
         /// Git repository URL
         repo: String,
     },
-    /// Discover dotfiles repo on GitHub, GitLab or AzureDevOps
+    /// Discover dotfiles repo on GitHub
     Discover {
         /// Create the repo if not found
         #[arg(long)]
@@ -249,6 +241,7 @@ pub enum Commands {
         #[arg(last = true)]
         ubi_args: Vec<String>,
     },
+    /// Add actions to an existing configuration
     Add {
         #[command(subcommand)]
         add_command: AddCommand,
@@ -284,12 +277,6 @@ pub async fn execute(
                     Provider::GitHub { token } => {
                         cmd_init::discover_repo_with_github(create, token, &global_config).await?;
                     }
-                    Provider::GitLab { token } => {
-                        cmd_init::discover_repo_with_gitlab(create, token).await?;
-                    }
-                    Provider::AzureDevOps { token } => {
-                        cmd_init::discover_repo_with_azure_devops(create, token).await?;
-                    }
                 }
             }
             InitCommand::Create => {
@@ -299,12 +286,12 @@ pub async fn execute(
         Commands::Add { add_command } => match add_command {
             AddCommand::Config {
                 ref config_dir,
-                provided_tags: ref tags,
+                ref provided_tags,
                 ref required_tags,
             } => {
                 cmd_add::add_config(
                     config_dir,
-                    tags,
+                    provided_tags,
                     required_tags,
                     &[],
                     &[],

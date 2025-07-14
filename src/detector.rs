@@ -1,5 +1,5 @@
 use crate::config::Tag;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     let mut tags = BTreeSet::new();
@@ -16,8 +16,6 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
             crate::config::Source::BuiltInDetector,
         ));
     }
-    let info = os_info::get();
-
     tags.insert(Tag::new(
         &format!("os_family={}", std::env::consts::FAMILY),
         crate::config::Source::BuiltInDetector,
@@ -30,6 +28,12 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
         &format!("arch={}", std::env::consts::ARCH),
         crate::config::Source::BuiltInDetector,
     ));
+    let alias = get_arch_alias();
+    tags.insert(Tag::new(
+        &format!("arch_alias={alias}"),
+        crate::config::Source::BuiltInDetector,
+    ));
+    let info = os_info::get();
     tags.insert(Tag::new(
         &format!("os_version={}", info.version()),
         crate::config::Source::BuiltInDetector,
@@ -58,6 +62,17 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
         _ => false,
     };
     tags
+}
+
+fn get_arch_alias() -> &'static str {
+    let arch_map = HashMap::from([
+        ("aarch64", "arm64"),
+        ("x86_64", "amd64"),
+        ("armv7", "armhf"),
+    ]);
+    arch_map
+        .get(std::env::consts::ARCH)
+        .unwrap_or(&std::env::consts::ARCH)
 }
 
 fn get_hostname() -> Result<String, std::io::Error> {

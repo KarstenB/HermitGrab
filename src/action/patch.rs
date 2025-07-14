@@ -131,7 +131,7 @@ fn content_and_extension(
     dst: &Path,
 ) -> Result<(serde_json::Value, Option<String>), PatchActionError> {
     let dst_content = if dst.exists() {
-        std::fs::read_to_string(dst).map_err(PatchActionError::IoError)?
+        std::fs::read_to_string(dst).map_err(PatchActionError::Io)?
     } else {
         "".to_string()
     };

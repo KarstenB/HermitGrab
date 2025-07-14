@@ -47,10 +47,6 @@ impl ActionOutput {
     pub fn is_empty(&self) -> bool {
         self.output_order.is_empty()
     }
-
-    pub fn len(&self) -> usize {
-        self.output_order.len()
-    }
 }
 
 impl IntoIterator for ActionOutput {

@@ -5,11 +5,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum HermitGrabError {
     #[error(transparent)]
-    AtomicLinkError(#[from] FileOpsError),
+    FileOps(#[from] FileOpsError),
     #[error(transparent)]
-    ConfigLoadError(#[from] ConfigError),
+    Config(#[from] ConfigError),
     #[error(transparent)]
-    ApplyError(#[from] ApplyError),
+    Apply(#[from] ApplyError),
 }
 
 #[derive(Debug, Error)]
@@ -29,17 +29,17 @@ pub enum ConfigError {
     #[error("Redeclaration of source: {0} found in file {1}")]
     DuplicateSource(String, PathBuf),
     #[error("An error occurred while handling the configuration file {1}: {0}")]
-    IoError(std::io::Error, PathBuf),
+    Io(std::io::Error, PathBuf),
     #[error("An error occurred while parsing the configuration file {1}: {0}")]
-    DeserializeTomlError(toml::de::Error, PathBuf),
+    DeserializeToml(toml::de::Error, PathBuf),
     #[error("An error occurred while serializing the configuration file {1}: {0}")]
-    SerializeTomlError(toml::ser::Error, PathBuf),
+    SerializeToml(toml::ser::Error, PathBuf),
     #[error("Duplicate profile found: {0} in file {1}")]
     DuplicateProfile(String, PathBuf),
     #[error("Failed to deserialize document in TOML format: {0} in file {1}")]
-    DeserializeDocumentTomlError(toml_edit::TomlError, PathBuf),
+    DeserializeDocumentToml(toml_edit::TomlError, PathBuf),
     #[error(transparent)]
-    RenderError(#[from] handlebars::RenderError),
+    Render(#[from] handlebars::RenderError),
     #[error("Failed to find source: {0}")]
     InstallSourceNotFound(String),
     #[error("Hermit configuration is not an action")]
@@ -51,43 +51,41 @@ pub enum ConfigError {
 #[derive(Debug, Error)]
 pub enum StatusError {
     #[error(transparent)]
-    ConfigError(#[from] ConfigError),
+    Config(#[from] ConfigError),
     #[error(transparent)]
-    ApplyError(#[from] ApplyError),
+    Apply(#[from] ApplyError),
     #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::Error),
+    SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
-    StdIoError(#[from] std::io::Error),
+    StdIo(#[from] std::io::Error),
 }
 
 #[derive(Debug, Error)]
 pub enum PatchActionError {
     #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::Error),
+    SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
-    PatchError(#[from] json_patch::PatchError),
+    Patch(#[from] json_patch::PatchError),
     #[error(transparent)]
-    YamlParseError(#[from] serde_yml::Error),
+    YamlParse(#[from] serde_yml::Error),
     #[error(transparent)]
-    TomlDeserializeError(#[from] toml::de::Error),
+    TomlDeserialize(#[from] toml::de::Error),
     #[error(transparent)]
-    TomlSerializeError(#[from] toml::ser::Error),
+    TomlSerialize(#[from] toml::ser::Error),
     #[error(transparent)]
-    SerdecParseError(#[from] jsonc_parser::errors::ParseError),
+    SerdecParse(#[from] jsonc_parser::errors::ParseError),
 }
 
 #[derive(Debug, Error)]
 pub enum AddError {
     #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error(transparent)]
-    FileOpsError(#[from] FileOpsError),
+    FileOps(#[from] FileOpsError),
     #[error(transparent)]
-    ConfigLoadError(#[from] ConfigError),
-    #[error("Failed to determine home directory")]
-    NoHomeDir,
+    ConfigLoad(#[from] ConfigError),
     #[error("Invalid choice")]
     InvalidChoice,
     #[error("Failed to locate source: {0}")]
@@ -99,19 +97,17 @@ pub enum AddError {
     #[error("Expected a string at key {0}, but found {1}")]
     ExpectedString(String, String),
     #[error(transparent)]
-    TomlSerializationError(#[from] toml::ser::Error),
+    TomlSerialization(#[from] toml::ser::Error),
     #[error(transparent)]
-    TomlDeserializationError(#[from] toml::de::Error),
+    TomlDeserialization(#[from] toml::de::Error),
     #[error(transparent)]
-    TomlEditSerializationError(#[from] toml_edit::ser::Error),
+    TomlEditSerialization(#[from] toml_edit::ser::Error),
     #[error(transparent)]
-    TomlEditDeserializationError(#[from] toml_edit::de::Error),
-    #[error("Internal conversion error")]
-    TomlConversion,
+    TomlEditDeserialization(#[from] toml_edit::de::Error),
     #[error("Failed to get filename")]
-    FileNameError,
+    FileName,
     #[error("Failed to strip prefix")]
-    StripPrefixError(#[from] StripPrefixError),
+    StripPrefix(#[from] StripPrefixError),
     #[error("A source with the file {0} already exists")]
     SourceAlreadyExists(PathBuf),
     #[error("The configuration file {0} already exists")]
@@ -129,23 +125,23 @@ pub enum ApplyError {
     #[error("The user aborted the operation")]
     UserAborted,
     #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Failed to find tag: {0}")]
     TagNotFound(String),
     #[error(transparent)]
-    ConfigLoadError(#[from] ConfigError),
+    ConfigLoad(#[from] ConfigError),
     #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::Error),
+    SerdeJson(#[from] serde_json::Error),
 }
 
 #[derive(Debug, Error)]
 pub enum ActionError {
     #[error(transparent)]
-    LinkActionError(#[from] LinkActionError),
+    Link(#[from] LinkActionError),
     #[error(transparent)]
-    InstallActionError(#[from] InstallActionError),
+    Install(#[from] InstallActionError),
     #[error(transparent)]
-    PatchActionError(#[from] PatchActionError),
+    Patch(#[from] PatchActionError),
 }
 
 #[derive(Debug, Error)]
@@ -153,13 +149,13 @@ pub enum LinkActionError {
     #[error("Failed to create parent directory for destination {1} due to IO error: {0}")]
     CreateParentDir(std::io::Error, PathBuf),
     #[error(transparent)]
-    AtomicLinkError(#[from] FileOpsError),
+    FileOps(#[from] FileOpsError),
 }
 
 #[derive(Debug, Error)]
 pub enum InstallActionError {
     #[error(transparent)]
-    RenderError(#[from] handlebars::RenderError),
+    Render(#[from] handlebars::RenderError),
     #[error("Install command failed: {0} with exit code {1}")]
     CommandFailed(String, i32),
     #[error("Failed to launch install command: {0} due to IO error: {1}")]
@@ -173,13 +169,13 @@ pub enum InstallActionError {
 #[derive(Debug, Error)]
 pub enum DiscoverError {
     #[error(transparent)]
-    GitError(#[from] git2::Error),
+    Git(#[from] git2::Error),
     #[error(transparent)]
-    OctocrabError(#[from] octocrab::Error),
+    Octocrab(#[from] octocrab::Error),
     #[error("No Git clone URL in Github response for repository: {0}")]
     NoGitCloneUrl(String),
     #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Invalid input: {0}")]
     InvalidInput(String),
     #[error("Repository already exists at path: {0}")]

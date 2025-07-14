@@ -12,8 +12,8 @@ use crate::{
     HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice,
     common_cli::{hint, prompt},
     config::{
-        CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType,
-        Source::CommandLine, Tag, load_hermit_config_editable,
+        CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType, Tag,
+        load_hermit_config_editable,
     },
     error,
     file_ops::copy,
@@ -52,12 +52,7 @@ pub fn add_config(
     }
     let mut config = HermitConfig::default();
     info!("Creating a new configuration file at {config_file:?}");
-    let provided_tags = if provided_tags.is_empty() {
-        prompt_for_provides()?
-    } else {
-        provided_tags.to_vec()
-    };
-    config.provides.extend(provided_tags);
+    config.provides.extend(provided_tags.to_vec());
     config.requires.extend(required_tags.to_vec());
     config.link.extend(links.to_vec());
     config.patch.extend(patches.to_vec());
@@ -65,19 +60,6 @@ pub fn add_config(
     std::fs::create_dir_all(config_dir)?;
     config.save_to_file(&config_file)?;
     Ok(())
-}
-
-fn prompt_for_provides() -> Result<Vec<Tag>, AddError> {
-    hint(
-        "If you want to avoid manually entering provided tags, use the --provides command line argument",
-    );
-    let cs_tags = prompt(
-        "Please enter the tags that the new configuration file will provide as comma separated list: ",
-    )?;
-    Ok(cs_tags
-        .split(',')
-        .map(|x| Tag::new(x, CommandLine))
-        .collect())
 }
 
 pub fn add_patch(
@@ -103,7 +85,7 @@ pub fn add_patch(
     let target = normalize_target(source, target, global_config)?;
     let source_filename: PathBuf = source
         .file_name()
-        .ok_or(AddError::FileNameError)?
+        .ok_or(AddError::FileName)?
         .to_string_lossy()
         .to_string()
         .into();
@@ -156,7 +138,7 @@ pub fn add_link(
     let target = normalize_target(source, target, global_config)?;
     let source_filename: PathBuf = source
         .file_name()
-        .ok_or(AddError::FileNameError)?
+        .ok_or(AddError::FileName)?
         .to_string_lossy()
         .to_string()
         .into();
