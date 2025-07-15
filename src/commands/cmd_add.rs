@@ -23,7 +23,6 @@ use crate::{
 
 pub fn add_config(
     config_dir: &Path,
-    provided_tags: &[Tag],
     required_tags: &[RequireTag],
     links: &[LinkConfig],
     patches: &[PatchConfig],
@@ -52,7 +51,6 @@ pub fn add_config(
     }
     let mut config = HermitConfig::default();
     info!("Creating a new configuration file at {config_file:?}");
-    config.provides.extend(provided_tags.to_vec());
     config.requires.extend(required_tags.to_vec());
     config.link.extend(links.to_vec());
     config.patch.extend(patches.to_vec());
@@ -68,7 +66,6 @@ pub fn add_patch(
     patch_type: &PatchType,
     target: &Option<PathBuf>,
     required_tags: &[RequireTag],
-    provided_tags: &[Tag],
     global_config: &Arc<GlobalConfig>,
 ) -> Result<(), AddError> {
     let config_dir = if let Some(target_dir) = config_dir {
@@ -94,15 +91,13 @@ pub fn add_patch(
         target,
         patch_type: patch_type.clone(),
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
-        provides: BTreeSet::new(),
     };
     if config_file.exists() {
         insert_into_existing(&config_file, &file_entry)?;
     } else {
         add_config(
             &config_dir,
-            provided_tags,
-            &[],
+            required_tags,
             &[],
             &[file_entry],
             &[],
@@ -120,7 +115,6 @@ pub fn add_link(
     link_type: &LinkType,
     target: &Option<PathBuf>,
     required_tags: &[RequireTag],
-    provided_tags: &[Tag],
     fallback: &FallbackOperation,
     global_config: &Arc<GlobalConfig>,
 ) -> Result<(), AddError> {
@@ -147,21 +141,12 @@ pub fn add_link(
         target,
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
-        provides: BTreeSet::new(),
         fallback: *fallback,
     };
     if config_file.exists() {
         insert_into_existing(&config_file, &file_entry)?;
     } else {
-        add_config(
-            &config_dir,
-            provided_tags,
-            &[],
-            &[file_entry],
-            &[],
-            &[],
-            global_config,
-        )?;
+        add_config(&config_dir, &[], &[file_entry], &[], &[], global_config)?;
     }
     copy(source, config_dir.join(source_filename).as_path())?;
     crate::success!("Added new link to {config_file:?}");

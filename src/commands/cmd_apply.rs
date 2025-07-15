@@ -28,15 +28,14 @@ pub fn apply_with_tags(
     hermitgrab_info!("Active tags: {}", active_tags_str);
     let actions = create_execution_plan(global_config, cli)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-    let sorted = filtered_actions.sort_by_requires();
-    present_execution_plan(&sorted);
+    present_execution_plan(&filtered_actions);
     if !cli.confirm {
         confirm_with_user()?;
     }
-    let results = sorted.execute_actions();
+    let results = filtered_actions.execute_actions();
     summarize(&results, cli.verbose);
     if let Some(json_path) = &cli.json {
-        let actions = sorted
+        let actions = filtered_actions
             .actions
             .iter()
             .map(|(_, action)| (action.id(), action))

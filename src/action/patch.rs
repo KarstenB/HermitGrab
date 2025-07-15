@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::{
     HermitConfig, RequireTag,
     action::{Action, ActionOutput, Status},
-    config::{ConfigItem, PatchConfig, PatchType, Tag},
+    config::{ConfigItem, PatchConfig, PatchType},
     hermitgrab_error::{ActionError, PatchActionError},
 };
 
@@ -21,7 +21,6 @@ pub struct PatchAction {
     dst: PathBuf,
     patch_type: PatchType,
     requires: Vec<RequireTag>,
-    provides: Vec<Tag>,
 }
 
 impl PatchAction {
@@ -34,7 +33,6 @@ impl PatchAction {
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
-        let provides = patch.get_all_provides(cfg);
         let requires = patch.get_all_requires(cfg);
         Self {
             src,
@@ -43,7 +41,6 @@ impl PatchAction {
             rel_dst,
             patch_type: patch.patch_type.clone(),
             requires: requires.into_iter().collect(),
-            provides: provides.into_iter().collect(),
         }
     }
 }
@@ -65,10 +62,6 @@ impl Action for PatchAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn provides(&self) -> &[Tag] {
-        &self.provides
-    }
-
     fn execute(&self) -> Result<(), ActionError> {
         match self.patch_type {
             PatchType::JsonMerge => {
@@ -83,10 +76,9 @@ impl Action for PatchAction {
     }
     fn id(&self) -> String {
         format!(
-            "PatchAction:{}:{}:{}:{}",
+            "PatchAction:{}:{}:{}",
             self.rel_src,
             self.rel_dst,
-            self.provides.iter().join(","),
             self.requires.iter().join(",")
         )
     }

@@ -6,10 +6,11 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use git2::Repository;
+use itertools::Itertools;
 
 use crate::{
     LinkType, RequireTag,
-    config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Tag},
+    config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Source, Tag},
     detector,
 };
 use crate::{hermitgrab_info, info};
@@ -80,9 +81,6 @@ pub enum AddCommand {
     Config {
         /// Subdirectory of the hermit.toml file to add the target directory to
         config_dir: PathBuf,
-        /// Tags this config provides. If empty assumes the last path segment as tag
-        #[arg(short = 'p', long = "provides", value_name = "TAG", num_args = 1..)]
-        provided_tags: Vec<Tag>,
         /// Tags this config requires for all of its links and other actions
         #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
@@ -105,9 +103,6 @@ pub enum AddCommand {
         /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
         #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
-        /// Provided tags in case a new config file will be created, i.e. target does not yet exist.
-        #[arg(long = "provides", value_name = "TAG", num_args = 0..)]
-        provided_tags: Vec<Tag>,
         /// Fallback strategy in case the target already exists
         #[arg(short = 'f', long, default_value = "abort", value_enum)]
         fallback: FallbackOperation,
@@ -130,9 +125,6 @@ pub enum AddCommand {
         /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
         #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
-        /// Provided tags in case a new config file will be created, i.e. target does not yet exist.
-        #[arg(long = "provides", value_name = "TAG", num_args = 0..)]
-        provided_tags: Vec<Tag>,
     },
     /// Add a new profile to the config
     Profile {
@@ -286,18 +278,9 @@ pub async fn execute(
         Commands::Add { add_command } => match add_command {
             AddCommand::Config {
                 ref config_dir,
-                ref provided_tags,
                 ref required_tags,
             } => {
-                cmd_add::add_config(
-                    config_dir,
-                    provided_tags,
-                    required_tags,
-                    &[],
-                    &[],
-                    &[],
-                    &global_config,
-                )?;
+                cmd_add::add_config(config_dir, required_tags, &[], &[], &[], &global_config)?;
             }
             AddCommand::Link {
                 ref config_dir,
@@ -305,7 +288,6 @@ pub async fn execute(
                 ref link_type,
                 ref target,
                 ref required_tags,
-                ref provided_tags,
                 ref fallback,
             } => {
                 cmd_add::add_link(
@@ -314,7 +296,6 @@ pub async fn execute(
                     link_type,
                     target,
                     required_tags,
-                    provided_tags,
                     fallback,
                     &global_config,
                 )?;
@@ -325,7 +306,6 @@ pub async fn execute(
                 ref patch_type,
                 ref target,
                 ref required_tags,
-                ref provided_tags,
             } => {
                 cmd_add::add_patch(
                     config_dir,
@@ -333,7 +313,6 @@ pub async fn execute(
                     patch_type,
                     target,
                     required_tags,
-                    provided_tags,
                     &global_config,
                 )?;
             }
@@ -387,7 +366,14 @@ pub async fn execute(
         }
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {
-                let mut all_tags = global_config.all_provided_tags().clone();
+                let mut all_tags = global_config
+                    .all_required_tags()
+                    .iter()
+                    .filter_map(|x| match x {
+                        RequireTag::Positive(x) => Some(Tag::new(x, Source::Config)),
+                        RequireTag::Negative(_) => None,
+                    })
+                    .collect_vec();
                 all_tags.extend(detector::detect_builtin_tags());
                 all_tags.extend(detector::get_detected_tags(&global_config)?);
                 hermitgrab_info("All tags (including auto-detected):");

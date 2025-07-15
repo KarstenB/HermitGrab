@@ -5,7 +5,6 @@ use enum_dispatch::enum_dispatch;
 use serde::Serialize;
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::config::Tag;
 use crate::hermitgrab_error::ActionError;
 use crate::{HermitConfig, RequireTag};
 pub mod install;
@@ -80,10 +79,6 @@ pub trait Action: Send + Sync {
         None
     }
     fn requires(&self) -> &[RequireTag];
-    fn provides(&self) -> &[Tag];
-    fn provides_tag(&self, tag: &Tag) -> bool {
-        self.provides().iter().any(|t| t == tag)
-    }
     fn id(&self) -> String;
     fn execute(&self) -> Result<(), ActionError>;
     fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status;

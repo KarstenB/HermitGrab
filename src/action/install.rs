@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::{
     HermitConfig, InstallConfig, RequireTag,
     action::{Action, ActionOutput, Status, id_from_hash},
-    config::{ConfigItem, Tag},
+    config::ConfigItem,
     hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
@@ -15,7 +15,6 @@ use crate::{
 pub struct InstallAction {
     name: String,
     requires: Vec<RequireTag>,
-    provides: Vec<Tag>,
     check_cmd: Option<String>,
     pre_install_cmd: Option<String>,
     post_install_cmd: Option<String>,
@@ -62,11 +61,9 @@ impl InstallAction {
             .transpose()?;
         let install_cmd = global_config.prepare_cmd(&install_cmd, &variables)?;
         let requires = install_entry.get_all_requires(cfg);
-        let provides = install_entry.get_all_provides(cfg);
         Ok(Self {
             name: install_entry.name.clone(),
             requires: requires.into_iter().collect(),
-            provides: provides.into_iter().collect(),
             check_cmd,
             pre_install_cmd,
             post_install_cmd,
@@ -129,9 +126,6 @@ impl Action for InstallAction {
     }
     fn requires(&self) -> &[RequireTag] {
         &self.requires
-    }
-    fn provides(&self) -> &[Tag] {
-        &self.provides
     }
     fn execute(&self) -> Result<(), ActionError> {
         if !self.install_required()? {

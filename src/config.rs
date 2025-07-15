@@ -207,9 +207,6 @@ pub struct HermitConfig {
     #[serde(skip)]
     global_cfg: Weak<GlobalConfig>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
-    pub provides: BTreeSet<Tag>,
-    #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub link: Vec<LinkConfig>,
     #[serde(default)]
@@ -283,10 +280,6 @@ impl HermitConfig {
 }
 
 impl ConfigItem for HermitConfig {
-    fn provides(&self) -> &BTreeSet<Tag> {
-        &self.provides
-    }
-
     fn requires(&self) -> &BTreeSet<RequireTag> {
         &self.requires
     }
@@ -383,16 +376,9 @@ pub struct PatchConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
-    pub provides: BTreeSet<Tag>,
 }
 
 impl ConfigItem for PatchConfig {
-    fn provides(&self) -> &BTreeSet<Tag> {
-        &self.provides
-    }
-
     fn requires(&self) -> &BTreeSet<RequireTag> {
         &self.requires
     }
@@ -416,9 +402,6 @@ pub struct LinkConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
-    pub provides: BTreeSet<Tag>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default_fallback")]
     pub fallback: FallbackOperation,
@@ -566,10 +549,6 @@ impl Display for FileStatus {
 impl LinkConfig {}
 
 impl ConfigItem for LinkConfig {
-    fn provides(&self) -> &BTreeSet<Tag> {
-        &self.provides
-    }
-
     fn requires(&self) -> &BTreeSet<RequireTag> {
         &self.requires
     }
@@ -602,18 +581,11 @@ pub struct InstallConfig {
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
-    pub provides: BTreeSet<Tag>,
-    #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, String>,
 }
 
 impl ConfigItem for InstallConfig {
-    fn provides(&self) -> &BTreeSet<Tag> {
-        &self.provides
-    }
-
     fn requires(&self) -> &BTreeSet<RequireTag> {
         &self.requires
     }
@@ -638,18 +610,9 @@ pub struct CliOptions {
 }
 
 pub trait ConfigItem {
-    fn provides(&self) -> &BTreeSet<Tag>;
     fn requires(&self) -> &BTreeSet<RequireTag>;
-    fn get_all_provides(&self, cfg: &HermitConfig) -> BTreeSet<Tag> {
-        let mut provides = self.provides().clone();
-        provides.extend(cfg.provides.iter().cloned());
-        provides
-    }
     fn get_all_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires().clone();
-        for tag in cfg.provides.iter() {
-            requires.insert(RequireTag::Positive(tag.0.clone()));
-        }
         requires.extend(cfg.requires.iter().cloned());
         requires
     }
@@ -663,7 +626,6 @@ pub struct GlobalConfig {
     home_dir: PathBuf,
     subconfigs: BTreeMap<String, ArcHermitConfig>,
     all_profiles: BTreeMap<String, BTreeSet<Tag>>,
-    all_provided_tags: BTreeSet<Tag>,
     all_required_tags: BTreeSet<RequireTag>,
     all_detected_tags: BTreeSet<Tag>,
     all_sources: BTreeMap<String, String>,
@@ -694,10 +656,6 @@ impl GlobalConfig {
                         continue;
                     }
                 };
-                for tag in config.config_items().flat_map(|c| c.provides().iter()) {
-                    log::debug!("Adding provided tag: {}", tag);
-                    result.all_provided_tags.insert(tag.clone());
-                }
                 for tag in config.config_items().flat_map(|c| c.requires().iter()) {
                     log::debug!("Adding required tag: {}", tag);
                     result.all_required_tags.insert(tag.clone());
@@ -769,10 +727,6 @@ impl GlobalConfig {
         &self.home_dir
     }
 
-    pub fn all_provided_tags(&self) -> &BTreeSet<Tag> {
-        &self.all_provided_tags
-    }
-
     pub fn all_required_tags(&self) -> &BTreeSet<RequireTag> {
         &self.all_required_tags
     }
@@ -818,11 +772,10 @@ impl GlobalConfig {
                 let t = t.trim();
                 if !t.is_empty() {
                     let cli_tag = Tag::new(t, Source::CommandLine);
-                    if self.all_provided_tags.contains(&cli_tag)
-                        || self
-                            .all_required_tags
-                            .iter()
-                            .any(|r| r.name() == cli_tag.name())
+                    if self
+                        .all_required_tags
+                        .iter()
+                        .any(|r| r.name() == cli_tag.name())
                     {
                         active_tags.insert(cli_tag);
                     } else {
@@ -832,7 +785,7 @@ impl GlobalConfig {
             }
         }
         active_tags.extend(
-            detector::get_detected_tags(&self)
+            detector::get_detected_tags(self)
                 .map_err(|e| ConfigError::Io(e, "detector".to_string().into()))?,
         );
         let profile_to_use = self.all_profiles.get(

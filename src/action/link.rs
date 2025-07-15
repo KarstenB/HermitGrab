@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::{
     HermitConfig, LinkConfig, LinkType, RequireTag,
     action::{Action, Status},
-    config::{ConfigItem, FallbackOperation, FileStatus, Tag},
+    config::{ConfigItem, FallbackOperation, FileStatus},
     file_ops::{check_copied, link_files},
     hermitgrab_error::{ActionError, LinkActionError},
 };
@@ -21,7 +21,6 @@ pub struct LinkAction {
     dst: PathBuf,
     link_type: LinkType,
     requires: Vec<RequireTag>,
-    provides: Vec<Tag>,
     fallback: FallbackOperation,
 }
 
@@ -44,7 +43,6 @@ impl LinkAction {
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
-        let provides = link_config.get_all_provides(cfg);
         let requires = link_config.get_all_requires(cfg);
         let fallback = (*fallback).unwrap_or(link_config.fallback);
         Self {
@@ -54,7 +52,6 @@ impl LinkAction {
             rel_dst,
             link_type: link_config.link,
             requires: requires.into_iter().collect(),
-            provides: provides.into_iter().collect(),
             fallback,
         }
     }
@@ -138,9 +135,6 @@ impl Action for LinkAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn provides(&self) -> &[Tag] {
-        &self.provides
-    }
     fn execute(&self) -> Result<(), ActionError> {
         link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
             .map_err(LinkActionError::FileOps)?;
@@ -148,12 +142,11 @@ impl Action for LinkAction {
     }
     fn id(&self) -> String {
         format!(
-            "LinkAction:{}:{}:{}:{}:{}:{}",
+            "LinkAction:{}:{}:{}:{}:{}",
             self.rel_src,
             self.rel_dst,
             self.link_type,
             self.fallback,
-            self.provides.iter().join(","),
             self.requires.iter().join(",")
         )
     }

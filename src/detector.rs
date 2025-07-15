@@ -89,7 +89,7 @@ fn create_detected_tag(
         DetectorConfig::EnableIf { enable_if } => {
             if execute_script(enable_if)?.status.success() {
                 Ok(Some(Tag::new(
-                    &name,
+                    name,
                     crate::config::Source::Detector(name.clone()),
                 )))
             } else {
@@ -101,7 +101,7 @@ fn create_detected_tag(
             if let Some(exit_code) = output.status.code() {
                 if exit_code != 0 {
                     Ok(Some(Tag::new(
-                        &name,
+                        name,
                         crate::config::Source::Detector(name.clone()),
                     )))
                 } else {
