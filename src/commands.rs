@@ -388,8 +388,8 @@ pub async fn execute(
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {
                 let mut all_tags = global_config.all_provided_tags().clone();
-                let detected_tags = detector::detect_builtin_tags();
-                all_tags.extend(detected_tags);
+                all_tags.extend(detector::detect_builtin_tags());
+                all_tags.extend(detector::get_detected_tags(&global_config)?);
                 hermitgrab_info("All tags (including auto-detected):");
                 for t in all_tags {
                     info!("- {} ({})", t.name(), t.source());

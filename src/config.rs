@@ -19,6 +19,7 @@ use crate::action::ArcAction;
 use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
+use crate::detector;
 use crate::detector::detect_builtin_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigError;
@@ -191,6 +192,14 @@ impl<'de> Deserialize<'de> for RequireTag {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum DetectorConfig {
+    EnableIf { enable_if: String },
+    EnableIfNot { enable_if_not: String },
+    ValueOf { value_of: String },
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct HermitConfig {
     #[serde(skip)]
@@ -218,6 +227,9 @@ pub struct HermitConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub profiles: BTreeMap<String, BTreeSet<Tag>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub detectors: BTreeMap<String, DetectorConfig>,
 }
 
 pub type ArcHermitConfig = Arc<HermitConfig>;
@@ -655,6 +667,7 @@ pub struct GlobalConfig {
     all_required_tags: BTreeSet<RequireTag>,
     all_detected_tags: BTreeSet<Tag>,
     all_sources: BTreeMap<String, String>,
+    all_detectors: BTreeMap<String, DetectorConfig>,
 }
 
 impl GlobalConfig {
@@ -704,6 +717,22 @@ impl GlobalConfig {
                     }
                     log::debug!("Adding source {}: {}", k, v);
                     result.all_sources.insert(k.to_lowercase(), v.clone());
+                }
+                for (k, v) in &config.detectors {
+                    if result.all_detectors.contains_key(&k.to_lowercase()) {
+                        crate::error!(
+                            "Duplicate detector key '{}' in config file: {}",
+                            k,
+                            config.path.display()
+                        );
+                        errors.push(ConfigError::DuplicateSource(
+                            k.to_string(),
+                            config.path.clone(),
+                        ));
+                        continue;
+                    }
+                    log::debug!("Adding detector {}: {:?}", k, v);
+                    result.all_detectors.insert(k.to_lowercase(), v.clone());
                 }
                 // Collect profiles (error on duplicate, lower-case, dedup tags)
                 for (profile, tags) in &config.profiles {
@@ -756,6 +785,10 @@ impl GlobalConfig {
         self.all_profiles.iter()
     }
 
+    pub fn all_detectors(&self) -> impl IntoIterator<Item = (&String, &DetectorConfig)> {
+        self.all_detectors.iter()
+    }
+
     pub fn subconfigs(&self) -> impl IntoIterator<Item = (&String, &ArcHermitConfig)> {
         self.subconfigs.iter()
     }
@@ -798,6 +831,10 @@ impl GlobalConfig {
                 }
             }
         }
+        active_tags.extend(
+            detector::get_detected_tags(&self)
+                .map_err(|e| ConfigError::Io(e, "detector".to_string().into()))?,
+        );
         let profile_to_use = self.all_profiles.get(
             &cli_profile
                 .as_deref()

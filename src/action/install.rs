@@ -192,7 +192,7 @@ impl Action for InstallAction {
     }
 }
 
-fn execute_script(cmd: &str) -> Result<Output, std::io::Error> {
+pub fn execute_script(cmd: &str) -> Result<Output, std::io::Error> {
     let path = if which::which("ubi").is_err() {
         insert_ubi_into_path()?
     } else {
