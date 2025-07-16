@@ -47,9 +47,9 @@ if [ ! -d ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/ ]; then
     mkdir ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release
 fi
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-pc-windows-gnu/release/hermitgrab-windows-x86_64.zip ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-windows-x86_64.zip
-cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64
+cp -p ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermitgrab-linux-aarch64.tar.gz ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64.tar.gz
-cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64
+cp -p ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab-linux-x86_64.tar.gz ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64.tar.gz
 """
 
@@ -65,9 +65,9 @@ cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release
 zip -r hermitgrab-macos-x86_64.zip hermitgrab
 cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release
 zip -r hermitgrab-macos-aarch64.zip hermitgrab
-cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64
+cp -p ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release/hermitgrab-macos-x86_64.zip ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64.zip
-cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64
+cp -p ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release/hermitgrab-macos-aarch64.zip ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64.zip
 """
 
