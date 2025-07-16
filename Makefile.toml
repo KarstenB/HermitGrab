@@ -36,6 +36,7 @@ dependencies = ["build-windows-x86_64", "build-linux-aarch64", "build-linux-x86_
 dependencies = ["build-linux-win"]
 script = """
 #!/bin/bash
+set -ex
 cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-pc-windows-gnu/release
 zip -r hermitgrab-windows-x86_64.zip hermitgrab.exe
 cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release
@@ -50,7 +51,6 @@ cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermi
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-unknown-linux-musl/release/hermitgrab-linux-aarch64.tar.gz ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64.tar.gz
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-unknown-linux-musl/release/hermitgrab-linux-x86_64.tar.gz ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64.tar.gz
-
 """
 
 [tasks.build-macos]
@@ -60,6 +60,7 @@ dependencies = ["build-mac-x86_64", "build-mac-aarch64"]
 dependencies = ["build-macos"]
 script = """
 #!/bin/bash
+set -ex
 cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release
 zip -r hermitgrab-macos-x86_64.zip hermitgrab
 cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release
@@ -68,5 +69,22 @@ cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release/hermitgrab $
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/x86_64-apple-darwin/release/hermitgrab-macos-x86_64.zip ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64.zip
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release/hermitgrab ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64
 cp ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/aarch64-apple-darwin/release/hermitgrab-macos-aarch64.zip ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64.zip
+"""
 
+[tasks.sign-macos]
+dependencies = ["pkg-macos"]
+script = """
+#!/bin/bash
+set -ex
+rcodesign sign --p12-file karsten.p12 --code-signature-flags runtime -e entitlements.xml ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64
+rcodesign sign --p12-file karsten.p12 --code-signature-flags runtime -e entitlements.xml ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64
+"""
+
+[tasks.copy-to-hermitdir]
+script="""
+#!/bin/bash
+set -ex
+cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64 $HOME/.hermitgrab/hermitgrab-macos-aarch64
+cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64 $HOME/.hermitgrab/hermitgrab-linux-x86_64
+cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64 $HOME/.hermitgrab/hermitgrab-linux-aarch64
 """
