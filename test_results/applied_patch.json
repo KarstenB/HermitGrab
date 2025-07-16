@@ -1,12 +1,9 @@
 {
   "actions": {
-    "PatchAction:patch.toml:.cargo/config.toml:cargo:+cargo": {
+    "PatchAction:patch.toml:.cargo/config.toml:+cargo": {
       "Patch": {
         "dst": "TEMP_DIR/.cargo/config.toml",
         "patch_type": "JsonMerge",
-        "provides": [
-          "cargo"
-        ],
         "requires": [
           "+cargo"
         ],
@@ -15,7 +12,7 @@
     }
   },
   "results": {
-    "PatchAction:patch.toml:.cargo/config.toml:cargo:+cargo": {
+    "PatchAction:patch.toml:.cargo/config.toml:+cargo": {
       "error": null,
       "ok": true,
       "output": null,

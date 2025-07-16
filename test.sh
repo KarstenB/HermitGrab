@@ -17,7 +17,7 @@ function hg_config_equals() {
         echo -e "${GREEN}No diff detected in config${NC}"
         return 0
     else
-        echo -e "${RED}File differs: $file${NC}"
+        echo -e "${RED}File differs: $expected${NC}"
         return 1
     fi
 }
@@ -34,7 +34,7 @@ function file_equals() {
         echo -e "${GREEN}No diff detected in $base${NC}"
         return 0
     else
-        echo -e "${RED}File differs: $file${NC}"
+        echo -e "${RED}File differs: $expected${NC}"
         return 8
     fi
 }
@@ -50,7 +50,7 @@ function hg_exec_json_equals() {
         echo -e "${GREEN}No diff detected in config${NC}"
         return 0
     else
-        echo -e "${RED}File differs: $file${NC}"
+        echo -e "${RED}File differs: $expected${NC}"
         return 2
     fi
 }
@@ -120,7 +120,7 @@ hg_file_exists ".git/HEAD"
 
 echo "Creating test1 config directory"
 echo "Test file content" > "$TEMP_DIR/testfile.txt"
-$HG add config test1 --provides "test1"
+$HG add config test1 --requires "test1"
 hg_file_exists "test1/hermit.toml"
 hg_config_equals "add_config_test1.json"
 
@@ -163,7 +163,7 @@ echo '[alias]
 mkdir -p "$HOME/.cargo"
 echo '[alias]
 "ntr" = "nextest run"' > "$HOME/.cargo/config.toml"
-$HG add patch "$HOME/patch.toml" -t "$HOME/.cargo/config.toml" --config-dir "cargo" --provides "cargo"
+$HG add patch "$HOME/patch.toml" -t "$HOME/.cargo/config.toml" --config-dir "cargo" --requires "cargo"
 hg_config_equals "add_patch.json"
 hg_file_exists "cargo/hermit.toml"
 hg_file_exists "cargo/patch.toml"

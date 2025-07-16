@@ -1,16 +1,13 @@
 use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    sync::{Arc, OnceLock},
+    collections::BTreeMap, path::PathBuf, sync::{Arc, OnceLock}
 };
 
 use clap::{Parser, Subcommand};
 use git2::Repository;
-use itertools::Itertools;
 
 use crate::{
     LinkType, RequireTag,
-    config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Source, Tag},
+    config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Tag},
     detector,
 };
 use crate::{hermitgrab_info, info};
@@ -366,19 +363,17 @@ pub async fn execute(
         }
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {
-                let mut all_tags = global_config
-                    .all_required_tags()
-                    .iter()
-                    .filter_map(|x| match x {
-                        RequireTag::Positive(x) => Some(Tag::new(x, Source::Config)),
-                        RequireTag::Negative(_) => None,
-                    })
-                    .collect_vec();
-                all_tags.extend(detector::detect_builtin_tags());
-                all_tags.extend(detector::get_detected_tags(&global_config)?);
-                hermitgrab_info("All tags (including auto-detected):");
-                for t in all_tags {
-                    info!("- {} ({})", t.name(), t.source());
+                hermitgrab_info("All tags as required in the configuration:");
+                for t in global_config.all_required_tags() {
+                    info!("- {t}");
+                }
+                hermitgrab_info("All built-in detected:");
+                for t in detector::detect_builtin_tags() {
+                    info!("- {t}");
+                }
+                hermitgrab_info("All tags by detectors in the configuration:");
+                for t in detector::get_detected_tags(&global_config)? {
+                    info!("- {t}");
                 }
             }
             GetCommand::Profiles => {

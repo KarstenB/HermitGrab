@@ -6,6 +6,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
+use std::convert::Infallible;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
@@ -48,31 +49,45 @@ impl Display for Source {
 }
 
 #[derive(Debug, Clone)]
-pub struct Tag(String, Source);
+pub struct Tag(String, Option<String>, Source);
 impl Tag {
     pub fn new(tag: &str, source: Source) -> Self {
-        Tag(tag.to_lowercase(), source)
+        Tag(tag.to_lowercase(), None, source)
+    }
+
+    pub fn new_with_value(tag: &str, value: &str, source: Source) -> Self {
+        Tag(tag.to_lowercase(), Some(value.to_string()), source)
     }
 
     pub fn name(&self) -> &str {
         &self.0
     }
-    pub fn source(&self) -> &Source {
+    pub fn value(&self) -> &Option<String> {
         &self.1
+    }
+    pub fn source(&self) -> &Source {
+        &self.2
     }
 
     pub fn is_detected(&self) -> bool {
-        matches!(self.1, Source::Detector(_) | Source::BuiltInDetector)
+        matches!(self.2, Source::Detector(_) | Source::BuiltInDetector)
+    }
+
+    pub fn from_str_with_src(s: &str, config: Source) -> Tag {
+        let mut tag: Tag = s.parse().expect("Infaillable");
+        tag.2 = config;
+        tag
     }
 }
 impl Hash for Tag {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
+        self.1.hash(state);
     }
 }
 impl PartialEq for Tag {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.0 == other.0 && self.1 == other.1
     }
 }
 impl Eq for Tag {}
@@ -83,24 +98,29 @@ impl PartialOrd for Tag {
 }
 impl Ord for Tag {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&other.0)
+        self.0.cmp(&other.0).then(self.1.cmp(&other.1))
     }
 }
 
 impl std::fmt::Display for Tag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        if let Some(value) = &self.1 {
+            write!(f, "{}={value}", self.0)
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
 impl FromStr for Tag {
-    type Err = String;
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.is_empty() {
-            return Err("Tag cannot be empty".to_string());
+        if let Some((key, value)) = s.split_once('=') {
+            Ok(Tag::new_with_value(key, value, Source::Unknown))
+        } else {
+            Ok(Tag::new(s, Source::Unknown))
         }
-        Ok(Tag::new(s, Source::Unknown))
     }
 }
 
@@ -109,7 +129,7 @@ impl Serialize for Tag {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.0)
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -119,44 +139,44 @@ impl<'de> Deserialize<'de> for Tag {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(Tag::new(&s, Source::Config))
+        Ok(s.parse().expect("Infallible"))
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum RequireTag {
-    Positive(String),
-    Negative(String),
+    Positive(Tag),
+    Negative(Tag),
 }
 
 impl RequireTag {
     pub fn matches(&self, tags: &BTreeSet<Tag>) -> bool {
         match self {
-            RequireTag::Positive(tag) => tags.contains(&Tag::new(tag, Source::Unknown)),
-            RequireTag::Negative(tag) => !tags.contains(&Tag::new(tag, Source::Unknown)),
+            RequireTag::Positive(tag) => tags.contains(tag),
+            RequireTag::Negative(tag) => !tags.contains(tag),
         }
     }
     pub fn name(&self) -> &str {
         match self {
-            RequireTag::Positive(tag) => tag,
-            RequireTag::Negative(tag) => tag,
+            RequireTag::Positive(tag) => tag.name(),
+            RequireTag::Negative(tag) => tag.name(),
         }
     }
 }
 
 impl FromStr for RequireTag {
-    type Err = String;
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
         if let Some(rest) = trimmed.strip_prefix('+') {
-            Ok(RequireTag::Positive(rest.to_string()))
+            Ok(RequireTag::Positive(rest.parse()?))
         } else if let Some(rest) = trimmed.strip_prefix('-') {
-            Ok(RequireTag::Negative(rest.to_string()))
+            Ok(RequireTag::Negative(rest.parse()?))
         } else if let Some(rest) = trimmed.strip_prefix('~') {
-            Ok(RequireTag::Negative(rest.to_string()))
+            Ok(RequireTag::Negative(rest.parse()?))
         } else {
-            Ok(RequireTag::Positive(trimmed.to_string()))
+            Ok(RequireTag::Positive(trimmed.parse()?))
         }
     }
 }

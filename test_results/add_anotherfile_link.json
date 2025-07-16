@@ -1,8 +1,5 @@
 {
   "test1/hermit.toml": {
-    "provides": [
-      "test1"
-    ],
     "link": [
       {
         "source": "testfile.txt",
@@ -16,6 +13,9 @@
         ],
         "fallback": "BackupOverwrite"
       }
+    ],
+    "requires": [
+      "+test1"
     ]
   }
 }

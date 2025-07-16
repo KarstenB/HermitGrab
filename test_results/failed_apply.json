@@ -1,13 +1,10 @@
 {
   "actions": {
-    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:test1:+test1,-another": {
+    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:+test1,-another": {
       "Link": {
         "dst": "TEMP_DIR/anotherfile.txt",
         "fallback": "BackupOverwrite",
         "link_type": "soft",
-        "provides": [
-          "test1"
-        ],
         "requires": [
           "+test1",
           "-another"
@@ -15,14 +12,11 @@
         "src": "TEMP_DIR/.hermitgrab/test1/anotherfile.txt"
       }
     },
-    "LinkAction:testfile.txt:testfile.txt:soft:abort:test1:+test1": {
+    "LinkAction:testfile.txt:testfile.txt:soft:abort:+test1": {
       "Link": {
         "dst": "TEMP_DIR/testfile.txt",
         "fallback": "Abort",
         "link_type": "soft",
-        "provides": [
-          "test1"
-        ],
         "requires": [
           "+test1"
         ],
@@ -31,13 +25,13 @@
     }
   },
   "results": {
-    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:test1:+test1,-another": {
+    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:+test1,-another": {
       "error": null,
       "ok": true,
       "output": null,
       "short_description": "Symlink anotherfile.txt -> anotherfile.txt"
     },
-    "LinkAction:testfile.txt:testfile.txt:soft:abort:test1:+test1": {
+    "LinkAction:testfile.txt:testfile.txt:soft:abort:+test1": {
       "error": "Destination is an existing file: TEMP_DIR/testfile.txt",
       "ok": false,
       "output": null,
