@@ -83,8 +83,7 @@ impl App {
             .collect::<BTreeSet<Tag>>();
         let actions = create_execution_plan(global_config, &CliOptions::default())?;
         let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-        let sorted = filtered_actions.sort_by_requires();
-        self.execution_plan = sorted
+        self.execution_plan = filtered_actions
             .iter()
             .map(|(_, a)| (a.short_description(), false))
             .collect::<Vec<_>>();
@@ -122,7 +121,7 @@ pub fn run_tui(
     // Collect all profiles and tags from GlobalConfig
     let actions = create_execution_plan(global_config, &CliOptions::default())?;
     let mut all_tags = global_config
-        .all_provided_tags()
+        .all_required_tags()
         .iter()
         .map(|t| (t.clone(), true))
         .collect::<Vec<_>>();
@@ -135,7 +134,6 @@ pub fn run_tui(
     let active_tags = global_config.get_active_tags(tags, profile)?;
     let profile_to_use = global_config.get_profile(profile)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-    let sorted = filtered_actions.sort_by_requires();
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -163,7 +161,7 @@ pub fn run_tui(
                 (t, active)
             })
             .collect(),
-        execution_plan: sorted
+        execution_plan: filtered_actions
             .iter()
             .map(|(_, a)| (a.short_description(), false))
             .collect(),

@@ -1,6 +1,12 @@
 use clap::ValueEnum;
 use clap::builder::PossibleValue;
+use handlebars::Context;
 use handlebars::Handlebars;
+use handlebars::Helper;
+use handlebars::Output;
+use handlebars::RenderContext;
+use handlebars::RenderError;
+use handlebars::RenderErrorReason;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -20,8 +26,8 @@ use crate::action::ArcAction;
 use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
-use crate::detector;
 use crate::detector::detect_builtin_tags;
+use crate::detector::get_detected_tags;
 use crate::hermitgrab_error::ApplyError;
 use crate::hermitgrab_error::ConfigError;
 
@@ -237,7 +243,7 @@ pub struct HermitConfig {
     pub install: Vec<InstallConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub sources: BTreeMap<String, String>,
+    pub snippets: BTreeMap<String, String>,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
@@ -291,11 +297,89 @@ impl HermitConfig {
             .chain(std::iter::once(self as &dyn ConfigItem))
     }
 
-    pub fn get_source(&self, lc_src: &str) -> Option<String> {
-        self.sources
+    pub fn get_snippet(
+        &self,
+        lc_src: &str,
+        variables: &BTreeMap<String, String>,
+    ) -> Option<String> {
+        self.snippets
             .get(lc_src)
             .cloned()
-            .or_else(|| self.global_config().get_source(lc_src).cloned())
+            .or_else(|| self.global_config().get_snippet(lc_src).cloned())
+            .and_then(|src| {
+                self.render_handlebars(&src, variables)
+                    .inspect_err(|e| crate::error!("Error while rendering template: {e}"))
+                    .ok()
+            })
+    }
+
+    pub fn render_handlebars(
+        &self,
+        content: &str,
+        variables: &BTreeMap<String, String>,
+    ) -> Result<String, handlebars::RenderError> {
+        let content = content.replace(
+            "~",
+            self.global_config().home_dir().to_str().unwrap_or(content),
+        );
+        let global_config = self.global_config();
+        let home_dir = global_config.home_dir();
+        let dir_map = BTreeMap::from_iter([
+            ("this", self.directory().to_path_buf()),
+            ("hermit", global_config.hermit_dir().to_path_buf()),
+            ("home", home_dir.to_path_buf()),
+            ("xdg_config", home_dir.join(".config")),
+            ("xdg_data", home_dir.join(".local").join("share")),
+            ("xdg_state", home_dir.join(".local").join("state")),
+        ]);
+        let all_tags: BTreeMap<String, String> = global_config
+            .all_detected_tags()
+            .iter()
+            .filter_map(|x| x.1.as_deref().map(|y| (x.0.to_string(), y.to_string())))
+            .collect();
+        let mut rendered_variables = BTreeMap::new();
+        let empty_map = BTreeMap::new();
+        let cfg = self;
+        for (key, value) in variables.iter() {
+            rendered_variables.insert(
+                key,
+                cfg.render_handlebars(value, &empty_map)
+                    .unwrap_or(value.to_string()),
+            );
+        }
+        let object = serde_json::json!({
+            "dir": dir_map,
+            "var": rendered_variables,
+            "tag": all_tags,
+        });
+        let mut reg = Handlebars::new();
+        reg.register_helper(
+            "snippet",
+            Box::new(
+                |h: &Helper,
+                 _: &Handlebars,
+                 _: &Context,
+                 _: &mut RenderContext,
+                 out: &mut dyn Output|
+                 -> Result<(), RenderError> {
+                    let snippet = h
+                        .param(0)
+                        .and_then(|x| x.relative_path())
+                        .ok_or(RenderErrorReason::ParamNotFoundForIndex("format", 0))?;
+                    let resolved = cfg.get_snippet(snippet, variables);
+                    if let Some(snippet) = resolved {
+                        out.write(&snippet)?;
+                    } else {
+                        return Err(RenderErrorReason::Other(
+                            "Failed to resolve snippet".to_string(),
+                        )
+                        .into());
+                    }
+                    Ok(())
+                },
+            ),
+        );
+        reg.render_template(&content, &object)
     }
 }
 
@@ -306,6 +390,10 @@ impl ConfigItem for HermitConfig {
 
     fn as_action(&self, _: &HermitConfig, _options: &CliOptions) -> Result<ArcAction, ConfigError> {
         Err(ConfigError::HermitConfigNotAction)
+    }
+
+    fn id(&self) -> String {
+        format!("HermitConfig {:?}", self.directory())
     }
 }
 
@@ -409,6 +497,10 @@ impl ConfigItem for PatchConfig {
         _options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
         Ok(Arc::new(Actions::Patch(PatchAction::new(self, cfg))))
+    }
+
+    fn id(&self) -> String {
+        format!("Patch {:?} with {:?}", self.target, self.source)
     }
 }
 
@@ -583,16 +675,20 @@ impl ConfigItem for LinkConfig {
             &options.fallback,
         ))))
     }
+
+    fn id(&self) -> String {
+        format!("Link {:?}->{:?}", self.source, self.target)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct InstallConfig {
     pub name: String,
-    pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub check_cmd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pre_install_cmd: Option<String>,
+    pub install_cmd: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub post_install_cmd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -617,6 +713,10 @@ impl ConfigItem for InstallConfig {
     ) -> Result<ArcAction, ConfigError> {
         Ok(Arc::new(Actions::Install(InstallAction::new(self, cfg)?)))
     }
+
+    fn id(&self) -> String {
+        format!("Install {}", self.name)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -630,6 +730,7 @@ pub struct CliOptions {
 }
 
 pub trait ConfigItem {
+    fn id(&self) -> String;
     fn requires(&self) -> &BTreeSet<RequireTag>;
     fn get_all_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires().clone();
@@ -648,7 +749,7 @@ pub struct GlobalConfig {
     all_profiles: BTreeMap<String, BTreeSet<Tag>>,
     all_required_tags: BTreeSet<RequireTag>,
     all_detected_tags: BTreeSet<Tag>,
-    all_sources: BTreeMap<String, String>,
+    all_snippets: BTreeMap<String, String>,
     all_detectors: BTreeMap<String, DetectorConfig>,
 }
 
@@ -663,6 +764,7 @@ impl GlobalConfig {
             let mut result = GlobalConfig {
                 hermit_dir: hermit_dir.to_path_buf(),
                 home_dir: home_dir.to_path_buf(),
+                all_detected_tags: detect_builtin_tags(),
                 ..Default::default()
             };
             for path in paths {
@@ -680,8 +782,8 @@ impl GlobalConfig {
                     log::debug!("Adding required tag: {}", tag);
                     result.all_required_tags.insert(tag.clone());
                 }
-                for (k, v) in &config.sources {
-                    if result.all_sources.contains_key(&k.to_lowercase()) {
+                for (k, v) in &config.snippets {
+                    if result.all_snippets.contains_key(&k.to_lowercase()) {
                         crate::error!(
                             "Duplicate source key '{}' in config file: {}",
                             k,
@@ -694,7 +796,7 @@ impl GlobalConfig {
                         continue;
                     }
                     log::debug!("Adding source {}: {}", k, v);
-                    result.all_sources.insert(k.to_lowercase(), v.clone());
+                    result.all_snippets.insert(k.to_lowercase(), v.clone());
                 }
                 for (k, v) in &config.detectors {
                     if result.all_detectors.contains_key(&k.to_lowercase()) {
@@ -733,7 +835,12 @@ impl GlobalConfig {
                 let relative_path_str = relative_path.to_string_lossy().to_string();
                 result.subconfigs.insert(relative_path_str, config);
             }
-            result.all_detected_tags = detect_builtin_tags();
+            match get_detected_tags(&result) {
+                Ok(custom_detected) => result.all_detected_tags.extend(custom_detected),
+                Err(e) => {
+                    crate::error!("Custom detector caused error: {e}");
+                }
+            }
             log::debug!("Detected tags: {:?}", result.all_detected_tags);
             result
         }))
@@ -767,8 +874,8 @@ impl GlobalConfig {
         self.subconfigs.iter()
     }
 
-    pub fn get_source(&self, key: &str) -> Option<&String> {
-        self.all_sources.get(key)
+    pub fn get_snippet(&self, key: &str) -> Option<&String> {
+        self.all_snippets.get(key)
     }
 
     pub fn get_tags_for_profile(&self, profile: &str) -> Result<BTreeSet<Tag>, ApplyError> {
@@ -804,10 +911,6 @@ impl GlobalConfig {
                 }
             }
         }
-        active_tags.extend(
-            detector::get_detected_tags(self)
-                .map_err(|e| ConfigError::Io(e, "detector".to_string().into()))?,
-        );
         let profile_to_use = self.all_profiles.get(
             &cli_profile
                 .as_deref()
@@ -851,20 +954,6 @@ impl GlobalConfig {
         let root_path = self.hermit_dir.join(CONF_FILE_NAME);
         self.subconfigs
             .get(&root_path.to_string_lossy().to_string())
-    }
-
-    pub fn prepare_cmd(
-        &self,
-        cmd: &str,
-        additional_variables: &BTreeMap<String, String>,
-    ) -> Result<String, ConfigError> {
-        let reg = Handlebars::new();
-        let data = additional_variables.clone();
-        let template = shellexpand::tilde(cmd).to_string();
-        let cmd = reg
-            .render_template(&template, &data)
-            .map_err(ConfigError::Render)?;
-        Ok(cmd)
     }
 
     pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
@@ -937,4 +1026,43 @@ pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_handlebar_snippets() {
+        let mut hermit_cfg = None;
+        let _ = Arc::new_cyclic(|weak| {
+            let mut global = GlobalConfig::default();
+            let mut hermit = HermitConfig::create_new(Path::new("bla/hermit.toml"), weak.clone());
+            hermit
+                .snippets
+                .insert("echo1".to_string(), "echo 1".to_string());
+            hermit.snippets.insert(
+                "echo2".to_string(),
+                "echo 2;{{ snippet echo1 }}".to_string(),
+            );
+            hermit.snippets.insert(
+                "echo3".to_string(),
+                "echo 3;{{ snippet echo2 }}".to_string(),
+            );
+            let hermit = Arc::new(hermit);
+            hermit_cfg = Some(hermit.clone());
+            global
+                .subconfigs
+                .insert("bla/hermit.toml".to_string(), hermit);
+            global
+        });
+        let Some(hermit_cfg) = hermit_cfg else {
+            panic!("Failed to get cfg");
+        };
+        let snippet = hermit_cfg.get_snippet("echo1", &BTreeMap::new()).unwrap();
+        assert_eq!(snippet, "echo 1");
+        let snippet = hermit_cfg.get_snippet("echo2", &BTreeMap::new()).unwrap();
+        assert_eq!(snippet, "echo 2;echo 1");
+        let snippet = hermit_cfg.get_snippet("echo3", &BTreeMap::new()).unwrap();
+        assert_eq!(snippet, "echo 3;echo 2;echo 1");
+    }
 }

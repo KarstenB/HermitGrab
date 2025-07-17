@@ -46,10 +46,8 @@
             },
             "args": [
                 "status",
-                "--profile=karsten",
-                "--hermit-dir=${workspaceFolder}/.hermitgrab",
-                "-t",
-                "k8s"
+                "--profile=default",
+                "--hermit-dir=/Users/kb/.hermitgrab/",
             ],
             "cwd": "${workspaceFolder}"
         },

@@ -66,10 +66,21 @@ pub fn create_execution_plan(
     cli: &CliOptions,
 ) -> Result<ExecutionPlan, ApplyError> {
     let mut actions: Vec<(ArcHermitConfig, ArcAction)> = Vec::new();
-    for (_, cfg) in global_config.subconfigs() {
+    for (path, cfg) in global_config.subconfigs() {
         for item in cfg.config_items() {
-            if let Ok(action) = item.as_action(cfg, cli) {
-                actions.push((cfg.clone(), action));
+            match item.as_action(cfg, cli) {
+                Ok(action) => {
+                    actions.push((cfg.clone(), action));
+                }
+                Err(e) => match e {
+                    crate::hermitgrab_error::ConfigError::HermitConfigNotAction => {}
+                    e => {
+                        crate::error!(
+                            "An error occured when preparing action in {path} for {}: {e}",
+                            item.id()
+                        )
+                    }
+                },
             }
         }
     }

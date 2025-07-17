@@ -1,5 +1,7 @@
 use std::{
-    collections::BTreeMap, path::PathBuf, sync::{Arc, OnceLock}
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, OnceLock},
 };
 
 use clap::{Parser, Subcommand};

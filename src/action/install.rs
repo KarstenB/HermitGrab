@@ -24,21 +24,7 @@ pub struct InstallAction {
 }
 impl InstallAction {
     pub fn new(install_entry: &InstallConfig, cfg: &HermitConfig) -> Result<Self, ConfigError> {
-        let lc_src = install_entry.source.to_lowercase();
-        let global_config = cfg.global_config();
-        let install_cmd = cfg.get_source(&lc_src);
-        let Some(install_cmd) = install_cmd else {
-            return Err(ConfigError::InstallSourceNotFound(lc_src.clone()));
-        };
         let mut variables = install_entry.variables.clone();
-        variables.insert(
-            "hermit_root_dir".to_string(),
-            global_config.hermit_dir().to_string_lossy().to_string(),
-        );
-        variables.insert(
-            "hermit_this_dir".to_string(),
-            cfg.directory().to_string_lossy().to_string(),
-        );
         variables.insert("name".to_string(), install_entry.name.clone());
         variables.insert(
             "version".to_string(),
@@ -47,19 +33,19 @@ impl InstallAction {
         let pre_install_cmd = install_entry
             .pre_install_cmd
             .as_deref()
-            .map(|cmd| global_config.prepare_cmd(cmd, &variables))
+            .map(|cmd| cfg.render_handlebars(cmd, &variables))
             .transpose()?;
         let post_install_cmd = install_entry
             .post_install_cmd
             .as_deref()
-            .map(|cmd| global_config.prepare_cmd(cmd, &variables))
+            .map(|cmd| cfg.render_handlebars(cmd, &variables))
             .transpose()?;
         let check_cmd = install_entry
             .check_cmd
             .as_deref()
-            .map(|cmd| global_config.prepare_cmd(cmd, &variables))
+            .map(|cmd| cfg.render_handlebars(cmd, &variables))
             .transpose()?;
-        let install_cmd = global_config.prepare_cmd(&install_cmd, &variables)?;
+        let install_cmd = cfg.render_handlebars(&install_entry.install_cmd, &variables)?;
         let requires = install_entry.get_all_requires(cfg);
         Ok(Self {
             name: install_entry.name.clone(),
