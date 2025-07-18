@@ -16,8 +16,6 @@ pub struct InstallAction {
     name: String,
     requires: Vec<RequireTag>,
     check_cmd: Option<String>,
-    pre_install_cmd: Option<String>,
-    post_install_cmd: Option<String>,
     install_cmd: String,
     #[derive_where(skip)]
     output: Mutex<Option<ActionOutput>>,
@@ -26,33 +24,17 @@ impl InstallAction {
     pub fn new(install_entry: &InstallConfig, cfg: &HermitConfig) -> Result<Self, ConfigError> {
         let mut variables = install_entry.variables.clone();
         variables.insert("name".to_string(), install_entry.name.clone());
-        variables.insert(
-            "version".to_string(),
-            install_entry.version.clone().unwrap_or_default(),
-        );
-        let pre_install_cmd = install_entry
-            .pre_install_cmd
-            .as_deref()
-            .map(|cmd| cfg.render_handlebars(cmd, &variables))
-            .transpose()?;
-        let post_install_cmd = install_entry
-            .post_install_cmd
-            .as_deref()
-            .map(|cmd| cfg.render_handlebars(cmd, &variables))
-            .transpose()?;
         let check_cmd = install_entry
-            .check_cmd
+            .check
             .as_deref()
             .map(|cmd| cfg.render_handlebars(cmd, &variables))
             .transpose()?;
-        let install_cmd = cfg.render_handlebars(&install_entry.install_cmd, &variables)?;
+        let install_cmd = cfg.render_handlebars(&install_entry.install, &variables)?;
         let requires = install_entry.get_all_requires(cfg);
         Ok(Self {
             name: install_entry.name.clone(),
             requires: requires.into_iter().collect(),
             check_cmd,
-            pre_install_cmd,
-            post_install_cmd,
             install_cmd,
             output: Mutex::new(None),
         })
@@ -117,18 +99,6 @@ impl Action for InstallAction {
         if !self.install_required()? {
             return Ok(()); // Installation not required
         }
-        if let Some(ref pre_cmd) = self.pre_install_cmd {
-            let output = execute_script(pre_cmd);
-            match output {
-                Ok(output) => {
-                    self.update_output(pre_cmd, output, "pre_cmd")?;
-                }
-                Err(e) => Err(InstallActionError::PreCommandFailedLaunch(
-                    pre_cmd.to_string(),
-                    e,
-                ))?,
-            }
-        }
         let output = execute_script(&self.install_cmd);
         match output {
             Ok(output) => {
@@ -138,18 +108,6 @@ impl Action for InstallAction {
                 self.install_cmd.clone(),
                 e,
             ))?,
-        }
-        if let Some(ref post_cmd) = self.post_install_cmd {
-            let output = execute_script(post_cmd);
-            match output {
-                Ok(output) => {
-                    self.update_output(post_cmd, output, "post_cmd")?;
-                }
-                Err(e) => Err(InstallActionError::PostCommandFailedLaunch(
-                    post_cmd.to_string(),
-                    e,
-                ))?,
-            }
         }
         Ok(())
     }

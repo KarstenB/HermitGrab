@@ -685,19 +685,11 @@ impl ConfigItem for LinkConfig {
 pub struct InstallConfig {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub check_cmd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pre_install_cmd: Option<String>,
-    pub install_cmd: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub post_install_cmd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub check: Option<String>,
+    pub install: String,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty", default)]
     pub requires: BTreeSet<RequireTag>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub variables: BTreeMap<String, String>,
 }
 
