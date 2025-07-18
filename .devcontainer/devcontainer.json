@@ -1,5 +1,5 @@
 {
-	"name": "Build Hermitgrab DevContainer",
+	"name": "Hermitgrab DevContainer",
 	"image": "ghcr.io/karstenb/hermitgrab-devcontainer",
 	"customizations": {
 		"vscode": {
