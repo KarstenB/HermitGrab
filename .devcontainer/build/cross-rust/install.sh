@@ -42,6 +42,7 @@ export TARGETS="--targets $ARCH-$VENDOR-$OS-musl --targets $ARCH-$VENDOR-$OS-gnu
 cargo binstall -y $TARGETS cargo-make
 cargo binstall -y $TARGETS cargo-nextest
 cargo binstall -y $TARGETS cargo-llvm-cov
+cargo binstall -y $TARGETS apple-codesign
 
 chown -R "${USERNAME}:rustlang" "${RUSTUP_HOME}" "${CARGO_HOME}"
 chmod g+r+w+s "${RUSTUP_HOME}" "${CARGO_HOME}"

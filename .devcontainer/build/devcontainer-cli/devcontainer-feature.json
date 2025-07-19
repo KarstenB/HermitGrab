@@ -1,0 +1,5 @@
+{
+    "id": "devcontainer-cli",
+    "version": "0.1.0",
+    "description": "Installs the devcontainer cli"
+}

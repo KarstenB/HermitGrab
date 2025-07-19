@@ -1,3 +1,6 @@
+[env]
+DEVCONTAINER_IMAGE="ghcr.io/karstenb/hermitgrab-devcontainer"
+
 [tasks.build-linux-x86_64]
 command = "cargo"
 args = ["build", "--target", "x86_64-unknown-linux-musl", "--release"]
@@ -76,8 +79,8 @@ dependencies = ["pkg-macos"]
 script = """
 #!/bin/bash
 set -ex
-rcodesign sign --p12-file karsten.p12 --code-signature-flags runtime -e entitlements.xml ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64
-rcodesign sign --p12-file karsten.p12 --code-signature-flags runtime -e entitlements.xml ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64
+rcodesign sign --p12-file hermitgrab.p12 --code-signature-flags runtime -e entitlements.xml ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-x86_64
+rcodesign sign --p12-file hermitgrab.p12 --code-signature-flags runtime -e entitlements.xml ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64
 """
 
 [tasks.copy-to-hermitdir]
@@ -88,3 +91,24 @@ cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64 $H
 cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-x86_64 $HOME/.hermitgrab/hermitgrab-linux-x86_64
 cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-linux-aarch64 $HOME/.hermitgrab/hermitgrab-linux-aarch64
 """
+
+[tasks.build-devcontainer]
+command = "devcontainer"
+args = [
+    "build",
+    "--workspace-folder=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}",
+    "--config=.devcontainer/build/devcontainer.json",
+    "--image-name=${DEVCONTAINER_IMAGE}",
+    "--platform=linux/arm64,linux/amd64",
+]
+
+[tasks.push-devcontainer]
+command = "devcontainer"
+args = [
+    "build",
+    "--workspace-folder=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}",
+    "--config=.devcontainer/build/devcontainer.json",
+    "--image-name=${DEVCONTAINER_IMAGE}",
+    "--platform=linux/arm64,linux/amd64",
+    "--push"
+]

@@ -24,24 +24,33 @@ pub struct PatchAction {
 }
 
 impl PatchAction {
-    pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Self {
-        let src = cfg.directory().join(&patch.source);
-        let rel_src = patch.source.to_string_lossy().to_string();
-        let dst = cfg.global_config().expand_directory(&patch.target);
+    pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Result<Self, std::io::Error> {
+        let src = if patch.source.is_absolute() {
+            patch.source.clone()
+        } else {
+            cfg.directory().join(&patch.source)
+        };
+        let src = src.canonicalize()?;
+        let rel_src = src
+            .strip_prefix(cfg.directory())
+            .unwrap_or(&patch.source)
+            .to_string_lossy()
+            .to_string();
+        let dst = cfg.expand_directory(&patch.target);
         let rel_dst = dst
             .strip_prefix(cfg.global_config().home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
         let requires = patch.get_all_requires(cfg);
-        Self {
+        Ok(Self {
             src,
             rel_src,
             dst,
             rel_dst,
             patch_type: patch.patch_type.clone(),
             requires: requires.into_iter().collect(),
-        }
+        })
     }
 }
 

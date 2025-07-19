@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Apply karsten&k8s forced",
+            "name": "Apply forced",
             "cargo": {
                 "args": [
                     "build",
@@ -21,11 +21,8 @@
             },
             "args": [
                 "apply",
-                "--profile=karsten",
                 "--hermit-dir=${workspaceFolder}/.hermitgrab",
                 "-yvF",
-                "-t",
-                "k8s"
             ],
             "cwd": "${workspaceFolder}"
         },

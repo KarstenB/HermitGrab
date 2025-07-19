@@ -29,15 +29,19 @@ impl LinkAction {
         link_config: &LinkConfig,
         cfg: &HermitConfig,
         fallback: &Option<FallbackOperation>,
-    ) -> Self {
-        let src = cfg.directory().join(&link_config.source);
-        let rel_src = link_config
-            .source
+    ) -> Result<Self, std::io::Error> {
+        let src = if link_config.source.is_absolute() {
+            link_config.source.clone()
+        } else {
+            cfg.directory().join(&link_config.source)
+        };
+        let src = src.canonicalize()?;
+        let rel_src = src
             .strip_prefix(cfg.directory())
             .unwrap_or(&link_config.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.global_config().expand_directory(&link_config.target);
+        let dst = cfg.expand_directory(&link_config.target);
         let rel_dst = dst
             .strip_prefix(cfg.global_config().home_dir())
             .unwrap_or(&dst)
@@ -45,7 +49,7 @@ impl LinkAction {
             .to_string();
         let requires = link_config.get_all_requires(cfg);
         let fallback = (*fallback).unwrap_or(link_config.fallback);
-        Self {
+        Ok(Self {
             src,
             rel_src,
             dst,
@@ -53,14 +57,11 @@ impl LinkAction {
             link_type: link_config.link,
             requires: requires.into_iter().collect(),
             fallback,
-        }
+        })
     }
 
-    pub fn check(&self, cfg: &HermitConfig, quick: bool) -> FileStatus {
-        let cfg_dir = cfg.directory();
-        let src_file = cfg_dir.join(&self.src);
-        let src_file = src_file.canonicalize().unwrap_or(src_file);
-        let actual_dst = cfg.global_config().expand_directory(&self.dst);
+    pub fn check(&self, quick: bool) -> FileStatus {
+        let actual_dst = self.dst.clone();
         match actual_dst.try_exists() {
             Ok(exists) => {
                 if !exists {
@@ -78,7 +79,7 @@ impl LinkAction {
                 let Ok(read_link) = read_link else {
                     return FileStatus::FailedToReadSymlink(actual_dst);
                 };
-                if read_link != src_file {
+                if read_link != self.src {
                     return FileStatus::SymlinkDestinationMismatch(actual_dst, read_link);
                 }
                 FileStatus::Ok
@@ -90,9 +91,9 @@ impl LinkAction {
                         Ok(meta) => meta,
                         Err(e) => return FileStatus::FailedToGetMetadata(actual_dst, e),
                     };
-                    let src_meta = match src_file.metadata() {
+                    let src_meta = match self.src.metadata() {
                         Ok(src_meta) => src_meta,
-                        Err(e) => return FileStatus::FailedToGetMetadata(src_file, e),
+                        Err(e) => return FileStatus::FailedToGetMetadata(self.src.clone(), e),
                     };
                     use std::os::unix::fs::MetadataExt;
                     let dst_ino = dst_meta.ino();
@@ -110,7 +111,7 @@ impl LinkAction {
                     return check_copied(quick, &src_file, &actual_dst);
                 }
             }
-            LinkType::Copy => check_copied(quick, &src_file, &actual_dst),
+            LinkType::Copy => check_copied(quick, &self.src, &actual_dst),
         }
     }
 }
@@ -150,8 +151,8 @@ impl Action for LinkAction {
             self.requires.iter().join(",")
         )
     }
-    fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status {
-        let status = self.check(cfg, quick);
+    fn get_status(&self, _cfg: &HermitConfig, quick: bool) -> Status {
+        let status = self.check(quick);
         if status.is_ok() {
             return Status::Ok(format!("{} is linked", self.rel_dst));
         }

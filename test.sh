@@ -7,6 +7,10 @@ HG="$GIT_ROOT/target/debug/hermitgrab"
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
+SED='sed'
+if [ "$(uname -o)" == "Darwin" ]; then
+    SED='gsed'
+fi
 export RUST_LOG=error
 
 function hg_config_equals() {
@@ -45,7 +49,9 @@ function hg_exec_json_equals() {
     shift
     echo -e "${GREEN}Executing command: $*${NC}"
     "$@" --json "$actual" | tee "$TEMP_DIR/output.txt"
-    sed -i "s#${TEMP_DIR}#TEMP_DIR#g" "$actual"
+    $SED -i "s#${TEMP_DIR}#TEMP_DIR#g" "$actual"
+    # This is a MacOs thing...
+    $SED -i "s#/privateTEMP_DIR#TEMP_DIR#g" "$actual"
     if diff "$expected" "$actual"; then
         echo -e "${GREEN}No diff detected in config${NC}"
         return 0
@@ -95,7 +101,7 @@ function hg_is_symlinked() {
     local target="$HERMIT_ROOT/$1"
     local link="$HOME/$2"
     if [ -L "$link" ]; then
-        if [ "$(readlink "$link")" == "$target" ]; then
+        if [ "$(realpath "$link")" == "$(realpath "$target")" ]; then
             echo -e "${GREEN}Symlink $link points to $target${NC}"
             return 0
         else

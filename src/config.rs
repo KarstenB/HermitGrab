@@ -10,7 +10,6 @@ use handlebars::RenderErrorReason;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::fmt::Display;
@@ -328,9 +327,24 @@ impl HermitConfig {
             ("this", self.directory().to_path_buf()),
             ("hermit", global_config.hermit_dir().to_path_buf()),
             ("home", home_dir.to_path_buf()),
-            ("xdg_config", home_dir.join(".config")),
-            ("xdg_data", home_dir.join(".local").join("share")),
-            ("xdg_state", home_dir.join(".local").join("state")),
+            (
+                "xdg_config",
+                std::env::var("XDG_CONFIG_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or(home_dir.join(".config")),
+            ),
+            (
+                "xdg_data",
+                std::env::var("XDG_DATA_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or(home_dir.join(".local").join("share")),
+            ),
+            (
+                "xdg_state",
+                std::env::var("XDG_STATE_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or(home_dir.join(".local").join("state")),
+            ),
         ]);
         let all_tags: BTreeMap<String, String> = global_config
             .all_detected_tags()
@@ -380,6 +394,36 @@ impl HermitConfig {
             ),
         );
         reg.render_template(&content, &object)
+    }
+
+    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
+        let dir: PathBuf = dir.into();
+        let dir_str = dir.to_string_lossy().to_string();
+        let dir = self
+            .render_handlebars(&dir_str, &BTreeMap::new())
+            .unwrap_or(dir_str);
+
+        if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
+            dir.replace(
+                "~/.config",
+                &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
+            )
+            .into()
+        } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
+            dir.replace(
+                "~/.local/share",
+                &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
+            )
+            .into()
+        } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
+            dir.replace(
+                "~/.local/state",
+                &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
+            )
+            .into()
+        } else {
+            shellexpand::tilde(&dir).into_owned().into()
+        }
     }
 }
 
@@ -496,7 +540,9 @@ impl ConfigItem for PatchConfig {
         cfg: &HermitConfig,
         _options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
-        Ok(Arc::new(Actions::Patch(PatchAction::new(self, cfg))))
+        Ok(Arc::new(Actions::Patch(
+            PatchAction::new(self, cfg).map_err(|e| ConfigError::Io(e, self.source.clone()))?,
+        )))
     }
 
     fn id(&self) -> String {
@@ -534,6 +580,7 @@ pub enum FallbackOperation {
     BackupOverwrite,
     Delete,
     DeleteDir,
+    Ignore,
 }
 
 impl Display for FallbackOperation {
@@ -544,6 +591,7 @@ impl Display for FallbackOperation {
             FallbackOperation::BackupOverwrite => f.write_str("backupoverwrite"),
             FallbackOperation::Delete => f.write_str("delete"),
             FallbackOperation::DeleteDir => f.write_str("deletedir"),
+            FallbackOperation::Ignore => f.write_str("ignore"),
         }
     }
 }
@@ -556,6 +604,7 @@ impl ValueEnum for FallbackOperation {
             Self::BackupOverwrite,
             Self::Delete,
             Self::DeleteDir,
+            Self::Ignore,
         ]
     }
 
@@ -566,6 +615,7 @@ impl ValueEnum for FallbackOperation {
             FallbackOperation::BackupOverwrite => Some(PossibleValue::new("backupoverwrite")),
             FallbackOperation::Delete => Some(PossibleValue::new("delete")),
             FallbackOperation::DeleteDir => Some(PossibleValue::new("deletedir")),
+            FallbackOperation::Ignore => Some(PossibleValue::new("ignore")),
         }
     }
 }
@@ -669,11 +719,10 @@ impl ConfigItem for LinkConfig {
         cfg: &HermitConfig,
         options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
-        Ok(Arc::new(Actions::Link(LinkAction::new(
-            self,
-            cfg,
-            &options.fallback,
-        ))))
+        Ok(Arc::new(Actions::Link(
+            LinkAction::new(self, cfg, &options.fallback)
+                .map_err(|e| ConfigError::Io(e, self.source.clone()))?,
+        )))
     }
 
     fn id(&self) -> String {
@@ -946,37 +995,6 @@ impl GlobalConfig {
         let root_path = self.hermit_dir.join(CONF_FILE_NAME);
         self.subconfigs
             .get(&root_path.to_string_lossy().to_string())
-    }
-
-    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
-        let handlebars = handlebars::Handlebars::new();
-        let dir: PathBuf = dir.into();
-        let dir_str = dir.to_string_lossy().to_string();
-        let dir = handlebars
-            .render_template(&dir_str, &HashMap::<String, String>::new())
-            .unwrap_or_else(|_| dir_str.to_string());
-
-        if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
-            dir.replace(
-                "~/.config",
-                &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
-            dir.replace(
-                "~/.local/share",
-                &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
-            dir.replace(
-                "~/.local/state",
-                &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else {
-            shellexpand::tilde(&dir).into_owned().into()
-        }
     }
 }
 

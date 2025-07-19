@@ -63,6 +63,9 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
                     std::fs::remove_file(&dst).map_err(|e| FileOpsError::Io(dst, e))?;
                 }
             }
+            FallbackOperation::Ignore => {
+                return Ok(());
+            }
         }
     }
     let dst_parent = dst_clone.parent();
