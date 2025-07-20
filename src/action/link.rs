@@ -112,7 +112,7 @@ impl LinkAction {
                     crate::common_cli::warn(
                         "Hardlink check not supported on non unix systems, checking file similarity",
                     );
-                    return check_copied(quick, &src_file, &actual_dst);
+                    return check_copied(quick, &self.src, &actual_dst);
                 }
             }
             LinkType::Copy => check_copied(quick, &self.src, &actual_dst),
