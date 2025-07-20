@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karsten Becker
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 use crate::commands::{Cli, Commands};
 use crate::config::{GlobalConfig, find_hermit_files};
 use crate::config::{HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag};

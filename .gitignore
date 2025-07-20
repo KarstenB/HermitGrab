@@ -24,3 +24,4 @@ target/
 .DS_Store
 /test_results/*_actual.*
 .aider*
+hermitgrab.p12

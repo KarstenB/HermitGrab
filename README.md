@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2025 Karsten Becker
+
+SPDX-License-Identifier: GPL-3.0-only
+-->
+
 # HermitGrab
 
 A powerful, tag-based dotfile manager written in Rust. Effortlessly manage configurations, install tools, and sync your entire development environment across any machine.
@@ -15,18 +21,16 @@ A powerful, tag-based dotfile manager written in Rust. Effortlessly manage confi
 
 ```toml
 # This configuration file provides the fish shell
-provides = ["fish"]
 # It requires a unix-like OS and will not run if zsh is a tag
-requires = ["+os_family=unix", "-zsh"]
+requires = ["fish", "+os_family=unix", "-zsh"]
 
-# Soft-link the main fish config, with a backup strategy
-[[file]]
+[[link]]
 source = "config.fish"
 target = "~/.config/fish/config.fish"
 fallback = "BackupOverwrite"
 
 # Conditionally install aliases only when 'ripgrep' tag is active
-[[file]]
+[[link]]
 source = "functions/egrep.fish"
 target = "~/.config/fish/functions/egrep.fish"
 requires = ["+ripgrep"]
@@ -38,21 +42,60 @@ source = "vscode_settings.json"
 target = "~/.vscode-server/data/Machine/settings.json"
 requires = ["user=vscode"]
 
+# Install the fish shell
 [[install]]
 name = "fish"
-check_cmd = "command -v fish"
-source = "ubi"
-requires = ["+arch=aarch64", "+os=linux"]
+# But only if not already installed
+check = "command -v fish"
+# Reference a snippet called ubi (universal binary installer)
+install = """{{ snippet ubi }}
+if [ ! -f "/usr/local/bin/fish" ]; then
+    sudo cp $HOME/.local/bin/fish /usr/local/bin/fish
+fi
+fish --install < {{ dir.this_dir }}/confirm.txt
+"""
+# Only on Linus
+requires = ["+os=linux"]
+# The ubi snippet uses variables to install from a URL, which is preprocessed to contain the arch_alias (arm64/amd64)
+variables = { exe = "fish", url = "https://github.com/fish-shell/fish-shell/releases/download/4.0.2/fish-static-{{ tag.arch_alias }}-4.0.2.tar.xz" }
 
-[install.variables]
-exe = "fish"
-url = "https://..."
+[[install]]
+name = "fish"
+check = "command -v fish"
+# On MacOs we simply use brew
+install = "brew install fish"
+requires = ["+os=macos"]
 
-# Profiles are collections of tags to activate
+# Profiles are a simply a named collection of tags
 [profiles]
 default = ["fish"]
-karsten = ["bashrc", "bat", "fish", "ripgrep"]
-work-rust = ["fish", "git", "rust", "starship"]
+personal = ["fish", "personal"]
+work = ["fish", "work"]
+
+# Detectors can automatically enable tags
+[detectors]
+has_git = { enable_if = "command -v git" }
+
+# Customize your settings for different profiles
+[[install]]
+name = "Git Personal Email"
+check = "[ $(git config --global --get user.email) = \"personal@icloud.com\" ]"
+install = """#!/bin/bash
+git config --global user.name \"Definitly Myname\"
+git config --global user.email \"personal@icloud.com\"
+git config --global user.signingkey \"ssh-ed25519 AAAAC3...\"
+"""
+requires = ["+personal", "+has_git"]
+
+[[install]]
+name = "Git Work Email"
+check = "[ $(git config --global --get user.email) = \"me@work.com\" ]"
+install = """#!/bin/bash
+git config --global user.name \"Definitly Myname\"
+git config --global user.email \"me@work.com\"
+git config --global user.signingkey \"ssh-ed25519 AAAAC3...\"
+"""
+requires = ["+work", "+has_git"]
 ```
 
 ## Installation
@@ -73,4 +116,4 @@ cargo install --git https://github.com/KarstenB/hermitgrab.git hermitgrab
 
 Released under the GPL-3.0 License.
 
-Copyright © 2024 - The HermitGrab Developers
+Copyright © 2025 - Karsten Becker

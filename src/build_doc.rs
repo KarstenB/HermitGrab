@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karsten Becker
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 use clap::{Command, CommandFactory};
 
 use crate::commands::Cli;

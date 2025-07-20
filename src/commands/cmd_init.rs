@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karsten Becker
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 use std::sync::Arc;
 
 use anyhow::Result;

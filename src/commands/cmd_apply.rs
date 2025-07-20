@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Karsten Becker
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::Arc;

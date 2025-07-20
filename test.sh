@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# SPDX-FileCopyrightText: 2025 Karsten Becker
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 set -e
 GIT_ROOT=$(git rev-parse --show-toplevel)
 cd "$GIT_ROOT"
