@@ -327,27 +327,58 @@ impl HermitConfig {
         );
         let global_config = self.global_config();
         let home_dir = global_config.home_dir();
-        let dir_map = BTreeMap::from_iter([
-            ("this", self.directory().to_path_buf()),
-            ("hermit", global_config.hermit_dir().to_path_buf()),
-            ("home", home_dir.to_path_buf()),
+        let dir_map: BTreeMap<&'static str, String> = BTreeMap::from_iter([
+            (
+                "this",
+                self.directory()
+                    .to_path_buf()
+                    .to_str()
+                    .expect("PathBuf is correct")
+                    .to_string(),
+            ),
+            (
+                "hermit",
+                global_config
+                    .hermit_dir()
+                    .to_path_buf()
+                    .to_str()
+                    .expect("PathBuf is correct")
+                    .to_string(),
+            ),
+            (
+                "home",
+                home_dir
+                    .to_path_buf()
+                    .to_str()
+                    .expect("PathBuf is correct")
+                    .to_string(),
+            ),
             (
                 "xdg_config",
                 std::env::var("XDG_CONFIG_HOME")
                     .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".config")),
+                    .unwrap_or(home_dir.join(".config"))
+                    .to_str()
+                    .expect("PathBuf is correct")
+                    .to_string(),
             ),
             (
                 "xdg_data",
                 std::env::var("XDG_DATA_HOME")
                     .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".local").join("share")),
+                    .unwrap_or(home_dir.join(".local").join("share"))
+                    .to_str()
+                    .expect("PathBuf is correct")
+                    .to_string(),
             ),
             (
                 "xdg_state",
                 std::env::var("XDG_STATE_HOME")
                     .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".local").join("state")),
+                    .unwrap_or(home_dir.join(".local").join("state"))
+                    .to_str()
+                    .expect("PathBuf is correct")
+                    .to_string(),
             ),
         ]);
         let all_tags: BTreeMap<String, String> = global_config
