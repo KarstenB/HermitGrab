@@ -2,17 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use serde::Serialize;
 
 use crate::{
-    HermitConfig, LinkConfig, LinkType, RequireTag,
-    action::{Action, Status},
-    config::{ConfigItem, FallbackOperation, FileStatus},
-    file_ops::{check_copied, link_files},
-    hermitgrab_error::{ActionError, LinkActionError},
+    action::{Action, ActionObserver, Status}, config::{ConfigItem, FallbackOperation, FileStatus}, file_ops::{check_copied, link_files}, hermitgrab_error::{ActionError, LinkActionError}, HermitConfig, LinkConfig, LinkType, RequireTag
 };
 
 #[derive(Serialize, Debug, Hash, PartialEq)]
@@ -140,9 +136,11 @@ impl Action for LinkAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn execute(&self) -> Result<(), ActionError> {
+    fn execute(&self, observer: &Arc< impl ActionObserver>) -> Result<(), ActionError> {
+        observer.action_progress(&self.id(), 0, 1, "Linking files");
         link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
             .map_err(LinkActionError::FileOps)?;
+        observer.action_progress(&self.id(), 1, 1, "Linking completed");
         Ok(())
     }
     fn id(&self) -> String {

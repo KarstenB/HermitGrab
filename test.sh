@@ -159,16 +159,18 @@ exec_contains "test1" "$HG" get tags
 echo "Listing profiles"
 exec_contains "testprofile" "$HG" get profiles
 
+echo "Applying test1 config expecting failure"
 hg_exec_json_equals failed_apply.json "$HG" apply -y --profile testProfile
 
-hg_exec_json_equals forced_apply.json "$HG" apply -y --profile testProfile --force
+echo "Applying test1 config with force and parallel"
+hg_exec_json_equals forced_apply.json "$HG" apply -y --profile testProfile --force --parallel
 file_exists "$HOME/anotherfile.txt.bak"
 file_exists "$HOME/testfile.txt.bak"
 hg_is_symlinked "test1/anotherfile.txt" "anotherfile.txt"
 hg_is_symlinked "test1/testfile.txt" "testfile.txt"
-
 hg_exec_json_equals linked_status.json "$HG" status --profile testProfile
 
+echo "Adding a patch"
 echo '[alias]
 "fa" = "format --all"' > "$HOME/patch.toml"
 mkdir -p "$HOME/.cargo"
@@ -178,6 +180,5 @@ $HG add patch "$HOME/patch.toml" -t "$HOME/.cargo/config.toml" --config-dir "car
 hg_config_equals "add_patch.json"
 hg_file_exists "cargo/hermit.toml"
 hg_file_exists "cargo/patch.toml"
-
 hg_exec_json_equals applied_patch.json "$HG" apply -y -t cargo
 file_equals "patched_config.toml" ".cargo/config.toml"

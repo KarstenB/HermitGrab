@@ -2,3 +2,7 @@
 linker = "x86_64-linux-gnu-gcc"
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"
+[alias]
+cf = "clippy --all-targets --all-features --fix --allow-dirty --allow-staged"
+fa = "fmt --all -- --config imports_granularity=module,group_imports=StdExternalCrate"
+ntr = "nextest run"

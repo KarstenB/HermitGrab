@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use enum_dispatch::enum_dispatch;
 use serde::Serialize;
@@ -17,7 +18,7 @@ pub mod patch;
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ActionOutput {
-    output_order: Vec<String>,
+    pub output_order: Vec<String>,
     standard_output: HashMap<String, String>,
     error_output: HashMap<String, String>,
 }
@@ -75,6 +76,13 @@ pub enum Status {
     NotSupported,
 }
 
+pub trait ActionObserver {
+    fn action_started(&self, action: &ArcAction);
+    fn action_output(&self, action_id: &str, output: &ActionOutput);
+    fn action_progress(&self, action_id: &str, current: u64, total: u64, msg: &str);
+    fn action_finished(&self, action: &ArcAction, result: &Result<(), ActionError>);
+}
+
 #[enum_dispatch]
 pub trait Action: Send + Sync {
     fn short_description(&self) -> String;
@@ -84,8 +92,11 @@ pub trait Action: Send + Sync {
     }
     fn requires(&self) -> &[RequireTag];
     fn id(&self) -> String;
-    fn execute(&self) -> Result<(), ActionError>;
+    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError>;
     fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status;
+    fn get_order(&self) -> u64 {
+        0
+    }
 }
 
 pub fn id_from_hash<T: Hash + Serialize>(item: &T) -> String {

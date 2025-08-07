@@ -539,8 +539,9 @@ impl ValueEnum for PatchType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Default)]
 pub enum PatchType {
+    #[default]
     JsonMerge,
     JsonPatch,
 }
@@ -558,7 +559,7 @@ impl Display for PatchType {
 pub struct PatchConfig {
     pub source: PathBuf,
     pub target: PathBuf,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub patch_type: PatchType,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]

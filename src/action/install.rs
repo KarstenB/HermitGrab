@@ -2,16 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{io::Write, process::Output, sync::Mutex};
+use std::{io::Write, process::Output, sync::{Arc, Mutex}};
 
 use derive_where::derive_where;
 use serde::Serialize;
 
 use crate::{
-    HermitConfig, InstallConfig, RequireTag,
-    action::{Action, ActionOutput, Status, id_from_hash},
-    config::ConfigItem,
-    hermitgrab_error::{ActionError, ConfigError, InstallActionError},
+    action::{id_from_hash, Action, ActionObserver, ActionOutput, Status}, config::ConfigItem, hermitgrab_error::{ActionError, ConfigError, InstallActionError}, HermitConfig, InstallConfig, RequireTag
 };
 
 #[derive(Serialize)]
@@ -99,10 +96,13 @@ impl Action for InstallAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn execute(&self) -> Result<(), ActionError> {
+    fn execute(&self, observer: &Arc< impl ActionObserver>) -> Result<(), ActionError> {
+        observer.action_progress(&self.id(), 0, 2, "Checking installation");
         if !self.install_required()? {
+            observer.action_progress(&self.id(), 2, 2, "Installation not required");
             return Ok(()); // Installation not required
         }
+        observer.action_progress(&self.id(), 1, 2, "Executing installation command");
         let output = execute_script(&self.install_cmd);
         match output {
             Ok(output) => {
@@ -113,6 +113,7 @@ impl Action for InstallAction {
                 e,
             ))?,
         }
+        observer.action_progress(&self.id(), 2, 2, "Installation completed");
         Ok(())
     }
     fn get_output(&self) -> Option<ActionOutput> {

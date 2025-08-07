@@ -2,21 +2,21 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 
 use serde::Serialize;
+use tokio::task::JoinSet;
 
 use crate::{
-    action::{Action, ArcAction},
+    action::{Action, ActionObserver, ArcAction},
     config::{ArcHermitConfig, CliOptions, GlobalConfig, Tag},
-    hermitgrab_error::{ActionError, ApplyError},
+    hermitgrab_error::{ActionError, ApplyError, ConfigError::HermitConfigNotAction},
 };
 pub type ArcConfigAction = (ArcHermitConfig, ArcAction);
 #[derive(Debug, Serialize)]
 pub struct ExecutionPlan {
     pub actions: Vec<ArcConfigAction>,
 }
-
 pub struct ActionResult {
     pub action: ArcAction,
     pub result: Result<(), ActionError>,
@@ -43,14 +43,52 @@ impl ExecutionPlan {
         ExecutionPlan { actions: filtered }
     }
 
-    pub fn execute_actions(&self) -> Vec<ActionResult> {
+    pub fn execute_actions(&self, observer: &Arc<impl ActionObserver>) -> Vec<ActionResult> {
         let mut results = Vec::new();
         for (_, a) in self.actions.iter() {
-            let res = a.execute();
+            observer.action_started(a);
+            let res = a.execute(observer);
+            observer.action_finished(a, &res);
             results.push(ActionResult {
                 action: a.clone(),
                 result: res,
             });
+        }
+        results
+    }
+
+    pub async fn execute_actions_parallel(&self, observer: &Arc<impl ActionObserver + Sync + Send + 'static>) -> Vec<ActionResult> {
+        let mut actions_by_order = BTreeMap::new();
+        for (_, a) in self.actions.iter() {
+            let order = a.get_order();
+            actions_by_order
+                .entry(order)
+                .or_insert_with(Vec::new)
+                .push(a.clone());
+        }
+        let mut results = Vec::new();
+        for (_, actions) in actions_by_order {
+            let mut tasks = JoinSet::new();
+            for action in actions {
+                let observer = observer.clone();
+                tasks.spawn(async move {
+                    observer.action_started(&action);
+                    let result = action.execute(&observer);
+                    observer.action_finished(&action, &result);
+                    ActionResult {
+                        action,
+                        result,
+                    }
+                });
+            }
+            while let Some(res) = tasks.join_next().await {
+                match res {
+                    Ok(action_result) => results.push(action_result),
+                    Err(e) => {
+                        crate::error!("Error executing action: {e}");
+                    }
+                }
+            }
         }
         results
     }
@@ -77,7 +115,7 @@ pub fn create_execution_plan(
                     actions.push((cfg.clone(), action));
                 }
                 Err(e) => match e {
-                    crate::hermitgrab_error::ConfigError::HermitConfigNotAction => {}
+                    HermitConfigNotAction => {}
                     e => {
                         crate::error!(
                             "An error occured when preparing action in {path} for {}: {e}",
@@ -88,5 +126,6 @@ pub fn create_execution_plan(
             }
         }
     }
+    actions.sort_by_key(|(_, action)| action.get_order());
     Ok(ExecutionPlan { actions })
 }

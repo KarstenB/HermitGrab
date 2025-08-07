@@ -20,8 +20,6 @@ use crate::{hermitgrab_info, info};
 
 pub mod cmd_add;
 pub mod cmd_apply;
-#[cfg(feature = "interactive")]
-pub mod cmd_apply_tui;
 pub mod cmd_init;
 pub mod cmd_status;
 
@@ -205,6 +203,9 @@ pub enum Commands {
         /// Same as -f backupoverwrite
         #[arg(short = 'F', long)]
         force: bool,
+        /// Run actions in parallel
+        #[arg(long, default_value_t = false)]
+        parallel: bool,
     },
     /// Show status of managed files
     Status {
@@ -327,9 +328,10 @@ pub async fn execute(
             ref tags,
             ref profile,
             ref fallback,
-            ref force,
+            force,
+            parallel,
         } => {
-            let fallback = if *force {
+            let fallback = if force {
                 Some(FallbackOperation::BackupOverwrite)
             } else {
                 *fallback
@@ -342,16 +344,10 @@ pub async fn execute(
                 profile: profile.clone(),
                 json: json.clone(),
             };
-            #[cfg(feature = "interactive")]
             if interactive {
-                cmd_apply_tui::run_tui(&global_config, tags, profile)?;
+                todo!("Interactive apply is not yet implemented");
             } else {
-                cmd_apply::apply_with_tags(&global_config, &cli)?;
-            }
-            #[cfg(not(feature = "interactive"))]
-            {
-                let _ = interactive;
-                cmd_apply::apply_with_tags(&global_config, &cli)?;
+                cmd_apply::apply_with_tags(&global_config, &cli, parallel).await?;
             }
         }
         Commands::Status {

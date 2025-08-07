@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use jsonc_parser::ParseOptions;
@@ -10,7 +13,7 @@ use serde::Serialize;
 
 use crate::{
     HermitConfig, RequireTag,
-    action::{Action, ActionOutput, Status},
+    action::{Action, ActionObserver, ActionOutput, Status},
     config::{ConfigItem, PatchConfig, PatchType},
     hermitgrab_error::{ActionError, PatchActionError},
 };
@@ -75,18 +78,23 @@ impl Action for PatchAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn execute(&self) -> Result<(), ActionError> {
+
+    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError> {
+        observer.action_progress(&self.id(), 0, 1, "Applying patch");
         match self.patch_type {
             PatchType::JsonMerge => {
                 merge_json(&self.src, &self.dst)?;
+                observer.action_progress(&self.id(), 1, 1, "Merge completed");
                 Ok(())
             }
             PatchType::JsonPatch => {
                 patch_json(&self.src, &self.dst)?;
+                observer.action_progress(&self.id(), 1, 1, "Patch completed");
                 Ok(())
             }
         }
     }
+
     fn id(&self) -> String {
         format!(
             "PatchAction:{}:{}:{}",
@@ -95,6 +103,7 @@ impl Action for PatchAction {
             self.requires.iter().join(",")
         )
     }
+    
     fn get_status(&self, _cfg: &HermitConfig, _quick: bool) -> Status {
         Status::NotSupported
     }
