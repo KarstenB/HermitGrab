@@ -2,13 +2,20 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{io::Write, process::Output, sync::{Arc, Mutex}};
+use std::{
+    io::Write,
+    process::Output,
+    sync::{Arc, Mutex},
+};
 
 use derive_where::derive_where;
 use serde::Serialize;
 
 use crate::{
-    action::{id_from_hash, Action, ActionObserver, ActionOutput, Status}, config::ConfigItem, hermitgrab_error::{ActionError, ConfigError, InstallActionError}, HermitConfig, InstallConfig, RequireTag
+    HermitConfig, InstallConfig, RequireTag,
+    action::{Action, ActionObserver, ActionOutput, Status, id_from_hash},
+    config::ConfigItem,
+    hermitgrab_error::{ActionError, ConfigError, InstallActionError},
 };
 
 #[derive(Serialize)]
@@ -18,6 +25,7 @@ pub struct InstallAction {
     requires: Vec<RequireTag>,
     check_cmd: Option<String>,
     install_cmd: String,
+    order: u64,
     #[derive_where(skip)]
     output: Mutex<Option<ActionOutput>>,
 }
@@ -37,6 +45,7 @@ impl InstallAction {
             requires: requires.into_iter().collect(),
             check_cmd,
             install_cmd,
+            order: install_entry.total_order(cfg),
             output: Mutex::new(None),
         })
     }
@@ -96,7 +105,7 @@ impl Action for InstallAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn execute(&self, observer: &Arc< impl ActionObserver>) -> Result<(), ActionError> {
+    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError> {
         observer.action_progress(&self.id(), 0, 2, "Checking installation");
         if !self.install_required()? {
             observer.action_progress(&self.id(), 2, 2, "Installation not required");
@@ -132,6 +141,10 @@ impl Action for InstallAction {
             Ok(true) => Status::NotOk(format!("{} is not installed", self.name)),
             Err(e) => Status::Error(format!("Failed to check installation: {}", e)),
         }
+    }
+
+    fn get_order(&self) -> u64 {
+        self.order
     }
 }
 

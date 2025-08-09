@@ -94,9 +94,7 @@ pub trait Action: Send + Sync {
     fn id(&self) -> String;
     fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError>;
     fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status;
-    fn get_order(&self) -> u64 {
-        0
-    }
+    fn get_order(&self) -> u64;
 }
 
 pub fn id_from_hash<T: Hash + Serialize>(item: &T) -> String {

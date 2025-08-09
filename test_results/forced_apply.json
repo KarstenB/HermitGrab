@@ -5,6 +5,7 @@
         "dst": "TEMP_DIR/anotherfile.txt",
         "fallback": "BackupOverwrite",
         "link_type": "soft",
+        "order": 0,
         "requires": [
           "+test1",
           "-another"
@@ -17,6 +18,7 @@
         "dst": "TEMP_DIR/testfile.txt",
         "fallback": "BackupOverwrite",
         "link_type": "soft",
+        "order": 0,
         "requires": [
           "+test1"
         ],

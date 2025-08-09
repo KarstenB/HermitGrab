@@ -7,7 +7,8 @@
         "type": "JsonMerge",
         "requires": [
           "+cargo"
-        ]
+        ],
+        "order": 10
       }
     ],
     "requires": [

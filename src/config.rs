@@ -251,6 +251,9 @@ pub struct HermitConfig {
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u64>,
+    #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub profiles: BTreeMap<String, BTreeSet<Tag>>,
     #[serde(default)]
@@ -474,6 +477,10 @@ impl ConfigItem for HermitConfig {
     fn id(&self) -> String {
         format!("HermitConfig {:?}", self.directory())
     }
+
+    fn order(&self) -> Option<u64> {
+        self.order
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, Hash, PartialEq, Eq)]
@@ -564,6 +571,9 @@ pub struct PatchConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u64>,
 }
 
 impl ConfigItem for PatchConfig {
@@ -584,6 +594,10 @@ impl ConfigItem for PatchConfig {
     fn id(&self) -> String {
         format!("Patch {:?} with {:?}", self.target, self.source)
     }
+
+    fn order(&self) -> Option<u64> {
+        self.order
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -599,6 +613,9 @@ pub struct LinkConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default_fallback")]
     pub fallback: FallbackOperation,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u64>,
 }
 fn is_default_fallback(fallback: &FallbackOperation) -> bool {
     matches!(fallback, FallbackOperation::Abort)
@@ -764,6 +781,10 @@ impl ConfigItem for LinkConfig {
     fn id(&self) -> String {
         format!("Link {:?}->{:?}", self.source, self.target)
     }
+
+    fn order(&self) -> Option<u64> {
+        self.order
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -776,6 +797,9 @@ pub struct InstallConfig {
     pub requires: BTreeSet<RequireTag>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub variables: BTreeMap<String, String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u64>,
 }
 
 impl ConfigItem for InstallConfig {
@@ -794,6 +818,10 @@ impl ConfigItem for InstallConfig {
     fn id(&self) -> String {
         format!("Install {}", self.name)
     }
+
+    fn order(&self) -> Option<u64> {
+        self.order
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -809,6 +837,11 @@ pub struct CliOptions {
 pub trait ConfigItem {
     fn id(&self) -> String;
     fn requires(&self) -> &BTreeSet<RequireTag>;
+    fn order(&self) -> Option<u64>;
+    fn total_order(&self, cfg: &HermitConfig) -> u64 {
+        let cfg_order = cfg.order.unwrap_or(0);
+        self.order().unwrap_or(0).max(cfg_order)
+    }
     fn get_all_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires().clone();
         requires.extend(cfg.requires.iter().cloned());
@@ -1080,8 +1113,7 @@ mod tests {
     #[test]
     fn test_handlebar_snippets() {
         let mut hermit_cfg = None;
-        let _ = Arc::new_cyclic(|weak| {
-            let mut global = GlobalConfig::default();
+        let _global = Arc::new_cyclic(|weak| {
             let mut hermit = HermitConfig::create_new(Path::new("bla/hermit.toml"), weak.clone());
             hermit
                 .snippets
@@ -1096,6 +1128,7 @@ mod tests {
             );
             let hermit = Arc::new(hermit);
             hermit_cfg = Some(hermit.clone());
+            let mut global = GlobalConfig::default();
             global
                 .subconfigs
                 .insert("bla/hermit.toml".to_string(), hermit);

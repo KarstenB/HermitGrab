@@ -27,6 +27,7 @@ pub struct PatchAction {
     src: PathBuf,
     dst: PathBuf,
     patch_type: PatchType,
+    order: u64,
     requires: Vec<RequireTag>,
 }
 
@@ -55,6 +56,7 @@ impl PatchAction {
             rel_src,
             dst,
             rel_dst,
+            order: patch.total_order(cfg),
             patch_type: patch.patch_type.clone(),
             requires: requires.into_iter().collect(),
         })
@@ -103,9 +105,13 @@ impl Action for PatchAction {
             self.requires.iter().join(",")
         )
     }
-    
+
     fn get_status(&self, _cfg: &HermitConfig, _quick: bool) -> Status {
         Status::NotSupported
+    }
+
+    fn get_order(&self) -> u64 {
+        self.order
     }
 }
 

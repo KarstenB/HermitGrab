@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use serde::Serialize;
 use tokio::task::JoinSet;
@@ -57,7 +60,10 @@ impl ExecutionPlan {
         results
     }
 
-    pub async fn execute_actions_parallel(&self, observer: &Arc<impl ActionObserver + Sync + Send + 'static>) -> Vec<ActionResult> {
+    pub async fn execute_actions_parallel(
+        &self,
+        observer: &Arc<impl ActionObserver + Sync + Send + 'static>,
+    ) -> Vec<ActionResult> {
         let mut actions_by_order = BTreeMap::new();
         for (_, a) in self.actions.iter() {
             let order = a.get_order();
@@ -75,10 +81,7 @@ impl ExecutionPlan {
                     observer.action_started(&action);
                     let result = action.execute(&observer);
                     observer.action_finished(&action, &result);
-                    ActionResult {
-                        action,
-                        result,
-                    }
+                    ActionResult { action, result }
                 });
             }
             while let Some(res) = tasks.join_next().await {

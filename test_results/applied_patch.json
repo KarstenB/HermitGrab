@@ -3,6 +3,7 @@
     "PatchAction:patch.toml:.cargo/config.toml:+cargo": {
       "Patch": {
         "dst": "TEMP_DIR/.cargo/config.toml",
+        "order": 10,
         "patch_type": "JsonMerge",
         "requires": [
           "+cargo"

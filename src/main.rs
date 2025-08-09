@@ -76,6 +76,7 @@ async fn main() -> Result<()> {
         .home_dir()
         .to_path_buf();
     let global_config = GlobalConfig::from_paths(&search_root, &home_dir, &yaml_files)?;
+    #[cfg(not(feature = "interactive"))]
     let interactive = false;
     #[cfg(feature = "interactive")]
     let interactive = cli.interactive;

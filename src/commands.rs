@@ -85,6 +85,9 @@ pub enum AddCommand {
         /// Tags this config requires for all of its links and other actions
         #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
+        /// Order of the config in the config directory, if not specified, uses 0
+        #[arg(short = 'o', long, value_name = "ORDER")]
+        order: Option<u64>,
     },
     /// Add a new Link to the config
     Link {
@@ -107,6 +110,9 @@ pub enum AddCommand {
         /// Fallback strategy in case the target already exists
         #[arg(short = 'f', long, default_value = "abort", value_enum)]
         fallback: FallbackOperation,
+        /// Order of the link in the config, if not specified, uses 0
+        #[arg(short = 'o', long, value_name = "ORDER")]
+        order: Option<u64>,
     },
     /// Add a new Link to the config
     Patch {
@@ -126,6 +132,9 @@ pub enum AddCommand {
         /// A tag can start with a + to indicate it is required or a - to indicate it has to be excluded when present.
         #[arg(short = 'r', long = "requires", value_name = "TAG", num_args = 0..)]
         required_tags: Vec<RequireTag>,
+        /// Order of the link in the config, if not specified, uses 0
+        #[arg(short = 'o', long, value_name = "ORDER")]
+        order: Option<u64>,
     },
     /// Add a new profile to the config
     Profile {
@@ -283,8 +292,17 @@ pub async fn execute(
             AddCommand::Config {
                 ref config_dir,
                 ref required_tags,
+                ref order,
             } => {
-                cmd_add::add_config(config_dir, required_tags, &[], &[], &[], &global_config)?;
+                cmd_add::add_config(
+                    config_dir,
+                    required_tags,
+                    &[],
+                    &[],
+                    &[],
+                    &global_config,
+                    order,
+                )?;
             }
             AddCommand::Link {
                 ref config_dir,
@@ -293,6 +311,7 @@ pub async fn execute(
                 ref target,
                 ref required_tags,
                 ref fallback,
+                order,
             } => {
                 cmd_add::add_link(
                     config_dir,
@@ -302,6 +321,7 @@ pub async fn execute(
                     required_tags,
                     fallback,
                     &global_config,
+                    order,
                 )?;
             }
             AddCommand::Patch {
@@ -310,6 +330,7 @@ pub async fn execute(
                 ref patch_type,
                 ref target,
                 ref required_tags,
+                order,
             } => {
                 cmd_add::add_patch(
                     config_dir,
@@ -318,6 +339,7 @@ pub async fn execute(
                     target,
                     required_tags,
                     &global_config,
+                    order,
                 )?;
             }
             AddCommand::Profile { ref name, ref tags } => {

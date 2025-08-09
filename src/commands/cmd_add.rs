@@ -32,6 +32,7 @@ pub fn add_config(
     patches: &[PatchConfig],
     installs: &[InstallConfig],
     global_config: &Arc<GlobalConfig>,
+    order: &Option<u64>,
 ) -> Result<(), AddError> {
     let config_dir = if config_dir.ends_with(CONF_FILE_NAME) {
         config_dir
@@ -59,6 +60,7 @@ pub fn add_config(
     config.link.extend(links.to_vec());
     config.patch.extend(patches.to_vec());
     config.install.extend(installs.to_vec());
+    config.order = *order;
     std::fs::create_dir_all(config_dir)?;
     config.save_to_file(&config_file)?;
     Ok(())
@@ -71,6 +73,7 @@ pub fn add_patch(
     target: &Option<PathBuf>,
     required_tags: &[RequireTag],
     global_config: &Arc<GlobalConfig>,
+    order: Option<u64>,
 ) -> Result<(), AddError> {
     let config_dir = if let Some(target_dir) = config_dir {
         let new_target = PathBuf::from(target_dir);
@@ -95,6 +98,7 @@ pub fn add_patch(
         target,
         patch_type: patch_type.clone(),
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
+        order,
     };
     if config_file.exists() {
         insert_into_existing(&config_file, &file_entry)?;
@@ -106,6 +110,7 @@ pub fn add_patch(
             &[file_entry],
             &[],
             global_config,
+            &None,
         )?;
     }
     copy(source, config_dir.join(source_filename).as_path())?;
@@ -113,6 +118,7 @@ pub fn add_patch(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn add_link(
     config_dir: &Option<PathBuf>,
     source: &Path,
@@ -121,6 +127,7 @@ pub fn add_link(
     required_tags: &[RequireTag],
     fallback: &FallbackOperation,
     global_config: &Arc<GlobalConfig>,
+    order: Option<u64>,
 ) -> Result<(), AddError> {
     let config_dir = if let Some(target_dir) = config_dir {
         let new_target = PathBuf::from(target_dir);
@@ -146,11 +153,20 @@ pub fn add_link(
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
         fallback: *fallback,
+        order,
     };
     if config_file.exists() {
         insert_into_existing(&config_file, &file_entry)?;
     } else {
-        add_config(&config_dir, &[], &[file_entry], &[], &[], global_config)?;
+        add_config(
+            &config_dir,
+            &[],
+            &[file_entry],
+            &[],
+            &[],
+            global_config,
+            &None,
+        )?;
     }
     copy(source, config_dir.join(source_filename).as_path())?;
     crate::success!("Added new link to {config_file:?}");

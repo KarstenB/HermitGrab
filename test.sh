@@ -176,7 +176,7 @@ echo '[alias]
 mkdir -p "$HOME/.cargo"
 echo '[alias]
 "ntr" = "nextest run"' > "$HOME/.cargo/config.toml"
-$HG add patch "$HOME/patch.toml" -t "$HOME/.cargo/config.toml" --config-dir "cargo" --requires "cargo"
+$HG add patch "$HOME/patch.toml" -t "$HOME/.cargo/config.toml" --config-dir "cargo" --requires "cargo" --order 10
 hg_config_equals "add_patch.json"
 hg_file_exists "cargo/hermit.toml"
 hg_file_exists "cargo/patch.toml"

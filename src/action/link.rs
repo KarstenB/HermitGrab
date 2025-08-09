@@ -8,7 +8,11 @@ use itertools::Itertools;
 use serde::Serialize;
 
 use crate::{
-    action::{Action, ActionObserver, Status}, config::{ConfigItem, FallbackOperation, FileStatus}, file_ops::{check_copied, link_files}, hermitgrab_error::{ActionError, LinkActionError}, HermitConfig, LinkConfig, LinkType, RequireTag
+    HermitConfig, LinkConfig, LinkType, RequireTag,
+    action::{Action, ActionObserver, Status},
+    config::{ConfigItem, FallbackOperation, FileStatus},
+    file_ops::{check_copied, link_files},
+    hermitgrab_error::{ActionError, LinkActionError},
 };
 
 #[derive(Serialize, Debug, Hash, PartialEq)]
@@ -22,6 +26,7 @@ pub struct LinkAction {
     link_type: LinkType,
     requires: Vec<RequireTag>,
     fallback: FallbackOperation,
+    order: u64,
 }
 
 impl LinkAction {
@@ -55,6 +60,7 @@ impl LinkAction {
             dst,
             rel_dst,
             link_type: link_config.link,
+            order: link_config.total_order(cfg),
             requires: requires.into_iter().collect(),
             fallback,
         })
@@ -125,6 +131,7 @@ impl Action for LinkAction {
         };
         format!("{link_type_str} {} -> {}", self.rel_src, self.rel_dst)
     }
+
     fn long_description(&self) -> String {
         format!(
             "Symlink from {} to {} (tags: {:?})",
@@ -133,16 +140,19 @@ impl Action for LinkAction {
             self.requires
         )
     }
+
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn execute(&self, observer: &Arc< impl ActionObserver>) -> Result<(), ActionError> {
+
+    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError> {
         observer.action_progress(&self.id(), 0, 1, "Linking files");
         link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
             .map_err(LinkActionError::FileOps)?;
         observer.action_progress(&self.id(), 1, 1, "Linking completed");
         Ok(())
     }
+
     fn id(&self) -> String {
         format!(
             "LinkAction:{}:{}:{}:{}:{}",
@@ -153,6 +163,7 @@ impl Action for LinkAction {
             self.requires.iter().join(",")
         )
     }
+
     fn get_status(&self, _cfg: &HermitConfig, quick: bool) -> Status {
         let status = self.check(quick);
         if status.is_ok() {
@@ -165,6 +176,10 @@ impl Action for LinkAction {
             ));
         }
         Status::NotOk(format!("{} has issues: {}", self.rel_dst, status))
+    }
+
+    fn get_order(&self) -> u64 {
+        self.order
     }
 }
 
