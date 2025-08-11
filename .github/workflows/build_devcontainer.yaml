@@ -32,7 +32,7 @@ jobs:
             echo "tag=latest" >> $GITHUB_OUTPUT
           else
             # Sanitize branch name: replace / and other non-alphanum with -
-            sanitized=$(echo "${GITHUB_REF##*/}" | tr '/[^a-zA-Z0-9_-]' '-')
+            sanitized=$(echo "${GITHUB_REF##*/}" | tr -c 'a-zA-Z0-9_' '-')
             echo "tag=${sanitized}" >> $GITHUB_OUTPUT
           fi
 
