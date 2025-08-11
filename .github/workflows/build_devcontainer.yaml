@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - '.devcontainer/**'
+  schedule:
+    - cron: '0 0 1 * *'
 jobs:
   build-devcontainer:
     runs-on: ubuntu-latest
@@ -16,12 +18,31 @@ jobs:
       - name: Checkout (GitHub)
         uses: actions/checkout@v3
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2 
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR }}
+
+      - name: Set image tag
+        id: set_tag
+        run: |
+          if [ "${GITHUB_REF##*/}" = "main" ]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo Setting tag to latest
+          else
+            # Sanitize branch name: replace / and other non-alphanum with -
+            sanitized=$(echo "${GITHUB_REF##*/}" | tr -c 'a-zA-Z0-9_' '-' | sed 's/^-*//;s/-*$//')
+            echo "tag=${sanitized}" >> $GITHUB_OUTPUT
+            echo Setting tag to ${sanitized}
+          fi
 
       - name: Pre-build dev container image
         uses: devcontainers/ci@v0.3
@@ -30,3 +51,5 @@ jobs:
           cacheFrom: ghcr.io/karstenb/hermitgrab-devcontainer
           push: always
           configFile: .devcontainer/build/devcontainer.json
+          platform: linux/amd64,linux/arm64
+          imageTag: ${{ steps.set_tag.outputs.tag }}
