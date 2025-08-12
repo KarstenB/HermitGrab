@@ -3,6 +3,9 @@ name = "hermitgrab"
 version = "0.1.7"
 edition = "2024"
 
+[lib]
+path = "src/lib.rs"
+
 [features]
 default = ["integrations"]
 integrations = ["ubi"]
@@ -20,7 +23,7 @@ directories = "6.0.0"
 enum_dispatch = "0.3.13"
 git2 = { version = "0.20.2", features = [
     "vendored-libgit2",
-    "vendored-openssl",
+    "vendored-openssl"
 ] }
 handlebars = "6.3.2"
 hostname = "0.4.1"
@@ -55,3 +58,6 @@ lto = "fat"
 strip = "symbols"
 opt-level = "s"
 codegen-units = 1
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"

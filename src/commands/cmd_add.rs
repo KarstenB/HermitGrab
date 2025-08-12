@@ -2,27 +2,24 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::collections::BTreeSet;
+use std::iter::FromIterator;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use itertools::Itertools;
 use serde::Serialize;
-use std::{
-    collections::BTreeSet,
-    iter::FromIterator,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
 use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 
+use crate::common_cli::{hint, prompt};
+use crate::config::{
+    CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType, Tag,
+    load_hermit_config_editable,
+};
+use crate::file_ops::copy;
+use crate::hermitgrab_error::AddError;
 use crate::{
-    HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice,
-    common_cli::{hint, prompt},
-    config::{
-        CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType, Tag,
-        load_hermit_config_editable,
-    },
-    error,
-    file_ops::copy,
-    hermitgrab_error::AddError,
-    info, success,
+    HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice, error, info, success,
 };
 
 pub fn add_config(

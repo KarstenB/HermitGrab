@@ -2,21 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use itertools::Itertools;
 use jsonc_parser::ParseOptions;
 use serde::Serialize;
 
-use crate::{
-    HermitConfig, RequireTag,
-    action::{Action, ActionObserver, ActionOutput, Status},
-    config::{ConfigItem, PatchConfig, PatchType},
-    hermitgrab_error::{ActionError, PatchActionError},
-};
+use crate::action::{Action, ActionObserver, ActionOutput, Status};
+use crate::config::{ConfigItem, PatchConfig, PatchType};
+use crate::hermitgrab_error::{ActionError, PatchActionError};
+use crate::{HermitConfig, RequireTag};
 
 #[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct PatchAction {

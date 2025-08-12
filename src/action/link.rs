@@ -2,18 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use itertools::Itertools;
 use serde::Serialize;
 
-use crate::{
-    HermitConfig, LinkConfig, LinkType, RequireTag,
-    action::{Action, ActionObserver, Status},
-    config::{ConfigItem, FallbackOperation, FileStatus},
-    file_ops::{check_copied, link_files},
-    hermitgrab_error::{ActionError, LinkActionError},
-};
+use crate::action::{Action, ActionObserver, Status};
+use crate::config::{ConfigItem, FallbackOperation, FileStatus};
+use crate::file_ops::{check_copied, link_files};
+use crate::hermitgrab_error::{ActionError, LinkActionError};
+use crate::{HermitConfig, LinkConfig, LinkType, RequireTag};
 
 #[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct LinkAction {
@@ -185,11 +184,10 @@ impl Action for LinkAction {
 
 #[cfg(test)]
 mod tests {
-    use crate::LinkType;
+    use std::{env, fs};
 
     use super::*;
-    use std::env;
-    use std::fs;
+    use crate::LinkType;
 
     #[test]
     fn test_atomic_symlink_success() {

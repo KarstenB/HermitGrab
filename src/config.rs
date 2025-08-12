@@ -2,37 +2,28 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use clap::ValueEnum;
-use clap::builder::PossibleValue;
-use handlebars::Context;
-use handlebars::Handlebars;
-use handlebars::Helper;
-use handlebars::Output;
-use handlebars::RenderContext;
-use handlebars::RenderError;
-use handlebars::RenderErrorReason;
-use serde::Deserialize;
-use serde::Deserializer;
-use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
+
+use clap::ValueEnum;
+use clap::builder::PossibleValue;
+use handlebars::{
+    Context, Handlebars, Helper, Output, RenderContext, RenderError, RenderErrorReason,
+};
+use serde::{Deserialize, Deserializer, Serialize};
 use toml_edit::DocumentMut;
 
-use crate::action::Actions;
-use crate::action::ArcAction;
 use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
-use crate::detector::detect_builtin_tags;
-use crate::detector::get_detected_tags;
-use crate::hermitgrab_error::ApplyError;
-use crate::hermitgrab_error::ConfigError;
+use crate::action::{Actions, ArcAction};
+use crate::detector::{detect_builtin_tags, get_detected_tags};
+use crate::hermitgrab_error::{ApplyError, ConfigError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";

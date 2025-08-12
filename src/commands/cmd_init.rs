@@ -10,10 +10,10 @@ use oauth2::http::header::ACCEPT;
 use octocrab::Octocrab;
 use secrecy::{ExposeSecret, SecretBox};
 
-use crate::{
-    common_cli::success, config::GlobalConfig, hermitgrab_error::DiscoverError, hermitgrab_info,
-    info, prompt, success, warn,
-};
+use crate::common_cli::success;
+use crate::config::GlobalConfig;
+use crate::hermitgrab_error::DiscoverError;
+use crate::{hermitgrab_info, info, prompt, success, warn};
 
 pub fn clone_or_update_repo(
     repo: &str,

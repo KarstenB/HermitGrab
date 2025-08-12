@@ -2,10 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::env;
+use std::path::Path;
+use std::str::FromStr;
+
 use anyhow::{Error, Result, anyhow};
 use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
 use log::{debug, error};
-use std::{env, path::Path, str::FromStr};
 use strum::VariantNames;
 use thiserror::Error;
 use ubi::{ForgeType, Ubi, UbiBuilder};

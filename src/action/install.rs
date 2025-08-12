@@ -2,21 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{
-    io::Write,
-    process::Output,
-    sync::{Arc, Mutex},
-};
+use std::io::Write;
+use std::process::Output;
+use std::sync::{Arc, Mutex};
 
 use derive_where::derive_where;
 use serde::Serialize;
 
-use crate::{
-    HermitConfig, InstallConfig, RequireTag,
-    action::{Action, ActionObserver, ActionOutput, Status, id_from_hash},
-    config::ConfigItem,
-    hermitgrab_error::{ActionError, ConfigError, InstallActionError},
-};
+use crate::action::{Action, ActionObserver, ActionOutput, Status, id_from_hash};
+use crate::config::ConfigItem;
+use crate::hermitgrab_error::{ActionError, ConfigError, InstallActionError};
+use crate::{HermitConfig, InstallConfig, RequireTag};
 
 #[derive(Serialize)]
 #[derive_where(Debug, Hash, PartialEq)]
@@ -184,6 +180,7 @@ fn insert_ubi_into_path() -> Result<String, std::io::Error> {
 #[cfg(feature = "ubi")]
 fn insert_ubi_into_path() -> Result<String, std::io::Error> {
     use std::sync::OnceLock;
+
     use tempfile::TempDir;
     static UBI_EXE_DIR: OnceLock<TempDir> = OnceLock::new();
     let temp_dir =

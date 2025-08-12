@@ -2,18 +2,19 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::commands::{Cli, Commands};
-use crate::config::{GlobalConfig, find_hermit_files};
-use crate::config::{HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag};
-use crate::hermitgrab_error::FileOpsError;
-use crate::{
-    common_cli::{hermitgrab_info, info},
-    config::CONF_FILE_NAME,
-};
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::Parser;
 use directories::UserDirs;
-use std::path::PathBuf;
+
+use crate::commands::{Cli, Commands};
+use crate::common_cli::{hermitgrab_info, info};
+use crate::config::{
+    CONF_FILE_NAME, GlobalConfig, HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag,
+    find_hermit_files,
+};
+use crate::hermitgrab_error::FileOpsError;
 
 mod action;
 mod build_doc;

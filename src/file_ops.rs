@@ -2,12 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{ffi::OsString, path::Path};
+use std::ffi::OsString;
+use std::path::Path;
 
-use crate::{
-    FileOpsError, LinkType,
-    config::{FallbackOperation, FileStatus},
-};
+use crate::config::{FallbackOperation, FileStatus};
+use crate::{FileOpsError, LinkType};
 
 pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
     src: P,

@@ -2,19 +2,16 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use serde::Serialize;
 use tokio::task::JoinSet;
 
-use crate::{
-    action::{Action, ActionObserver, ArcAction},
-    config::{ArcHermitConfig, CliOptions, GlobalConfig, Tag},
-    hermitgrab_error::{ActionError, ApplyError, ConfigError::HermitConfigNotAction},
-};
+use crate::action::{Action, ActionObserver, ArcAction};
+use crate::config::{ArcHermitConfig, CliOptions, GlobalConfig, Tag};
+use crate::hermitgrab_error::ConfigError::HermitConfigNotAction;
+use crate::hermitgrab_error::{ActionError, ApplyError};
 pub type ArcConfigAction = (ArcHermitConfig, ArcAction);
 #[derive(Debug, Serialize)]
 pub struct ExecutionPlan {

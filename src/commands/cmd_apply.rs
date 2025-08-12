@@ -9,15 +9,13 @@ use std::sync::{Arc, Mutex};
 use crossterm::style::{Attribute, Color, Stylize};
 
 use crate::action::{Action, ActionObserver, ActionOutput, ArcAction};
-use crate::common_cli::success;
-use crate::common_cli::{stderr, stdout};
+#[allow(unused_imports)]
+use crate::common_cli::step;
+use crate::common_cli::{stderr, stdout, success};
 use crate::config::{CliOptions, GlobalConfig};
 use crate::execution_plan::{ExecutionPlan, create_execution_plan};
 use crate::hermitgrab_error::{ActionError, ApplyError};
 use crate::{error, hermitgrab_info};
-
-#[allow(unused_imports)]
-use crate::common_cli::step;
 
 pub struct CliReporter {
     verbose: bool,

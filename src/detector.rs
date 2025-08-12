@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{
-    action::install::execute_script,
-    config::{DetectorConfig, GlobalConfig, Tag},
-};
 use std::collections::{BTreeSet, HashMap};
+
+use crate::action::install::execute_script;
+use crate::config::{DetectorConfig, GlobalConfig, Tag};
 
 pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     let mut tags = BTreeSet::new();

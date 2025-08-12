@@ -2,16 +2,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use crate::{
-    action::{Action, Status},
-    config::{CliOptions, GlobalConfig},
-    error,
-    execution_plan::create_execution_plan,
-    hermitgrab_error::StatusError,
-    hermitgrab_info, success, warn,
-};
+use crate::action::{Action, Status};
+use crate::config::{CliOptions, GlobalConfig};
+use crate::execution_plan::create_execution_plan;
+use crate::hermitgrab_error::StatusError;
+use crate::{error, hermitgrab_info, success, warn};
 
 pub fn get_status(
     global_config: &Arc<GlobalConfig>,

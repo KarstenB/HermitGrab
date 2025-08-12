@@ -2,21 +2,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    sync::{Arc, OnceLock},
-};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 
 use clap::{Parser, Subcommand};
 use git2::Repository;
 
-use crate::{
-    LinkType, RequireTag,
-    config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Tag},
-    detector,
-};
-use crate::{hermitgrab_info, info};
+use crate::config::{CliOptions, FallbackOperation, GlobalConfig, PatchType, Tag};
+use crate::{LinkType, RequireTag, detector, hermitgrab_info, info};
 
 pub mod cmd_add;
 pub mod cmd_apply;
@@ -387,21 +381,21 @@ pub async fn execute(
         }
         Commands::Get { get_command } => match get_command {
             GetCommand::Tags => {
-                hermitgrab_info("All tags as required in the configuration:");
+                hermitgrab_info!("All tags as required in the configuration:");
                 for t in global_config.all_required_tags() {
                     info!("- {t}");
                 }
-                hermitgrab_info("All built-in detected:");
+                hermitgrab_info!("All built-in detected:");
                 for t in detector::detect_builtin_tags() {
                     info!("- {t}");
                 }
-                hermitgrab_info("All tags by detectors in the configuration:");
+                hermitgrab_info!("All tags by detectors in the configuration:");
                 for t in detector::get_detected_tags(&global_config)? {
                     info!("- {t}");
                 }
             }
             GetCommand::Profiles => {
-                hermitgrab_info("All profiles:");
+                hermitgrab_info!("All profiles:");
                 for (profile, tags) in global_config.all_profiles() {
                     info!(
                         "- {}: {}",
@@ -420,7 +414,7 @@ pub async fn execute(
                 }
 
                 let formatted = serde_yml::to_string(&config_map)?;
-                info("Printing the complete configuration:");
+                info!("Printing the complete configuration:");
                 println!("{}", formatted);
                 if let Some(json_path) = &json {
                     std::fs::write(json_path, serde_json::to_string_pretty(&config_map)?)?;
