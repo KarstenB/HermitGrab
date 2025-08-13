@@ -1,0 +1,27 @@
+order=10
+requires=["+ordered"]
+
+[[install]]
+name = "order 1"
+install = "echo 1 >> $HOME/test_exec_order.log"
+order = 1
+
+[[install]]
+name = "order 10"
+install = "echo 10 >> $HOME/test_exec_order.log"
+
+[[install]]
+name = "order 2"
+install = "echo 2 >> $HOME/test_exec_order.log"
+order = 2
+
+[[install]]
+name = "order 0"
+install = "echo 0 >> $HOME/test_exec_order.log"
+order = 0
+
+[[install]]
+name = "Unused"
+install = "echo 1 >> $HOME/test_exec_order.log"
+order = 1
+requires = ["+unused"]

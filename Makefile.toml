@@ -3,7 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 [env]
-DEVCONTAINER_IMAGE="ghcr.io/karstenb/hermitgrab-devcontainer"
+DEVCONTAINER_IMAGE = "ghcr.io/karstenb/hermitgrab-devcontainer"
+
+[tasks.llvm-cov]
+install_crate = { rustup_component_name = "llvm-tools-preview" }
+command = "cargo"
+args = ["llvm-cov", "nextest"]
 
 [tasks.build-linux-x86_64]
 command = "cargo"
@@ -91,7 +96,7 @@ rcodesign sign --p12-file hermitgrab.p12 --code-signature-flags runtime -e entit
 """
 
 [tasks.copy-to-hermitdir]
-script="""
+script = """
 #!/bin/bash
 set -ex
 cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/release/hermitgrab-macos-aarch64 $HOME/.hermitgrab/hermitgrab-macos-aarch64
@@ -117,5 +122,5 @@ args = [
     "--config=.devcontainer/build/devcontainer.json",
     "--image-name=${DEVCONTAINER_IMAGE}",
     "--platform=linux/arm64,linux/amd64",
-    "--push"
+    "--push",
 ]

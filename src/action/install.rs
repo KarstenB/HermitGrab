@@ -135,7 +135,7 @@ impl Action for InstallAction {
         match self.install_required() {
             Ok(false) => Status::Ok(format!("{} is installed", self.name)),
             Ok(true) => Status::NotOk(format!("{} is not installed", self.name)),
-            Err(e) => Status::Error(format!("Failed to check installation: {}", e)),
+            Err(e) => Status::Error(format!("Failed to check installation: {e}")),
         }
     }
 
@@ -159,7 +159,7 @@ pub fn execute_script(cmd: &str) -> Result<Output, std::io::Error> {
     };
     tempfile::NamedTempFile::new()
         .and_then(|mut file| {
-            writeln!(file, "{}", cmd)?;
+            writeln!(file, "{cmd}")?;
             file.flush()?;
             let cmd_path = file.into_temp_path();
             #[cfg(unix)]
@@ -208,7 +208,10 @@ fn insert_ubi_into_path() -> Result<String, std::io::Error> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
+    use crate::config::GlobalConfig;
 
     #[test]
     fn test_script_execution() {
@@ -225,8 +228,25 @@ mod tests {
         let stderr = String::from_utf8(output.stderr).unwrap();
         assert!(
             stderr.is_empty(),
-            "Expected no stderr output, got: {}",
-            stderr
+            "Expected no stderr output, got: {stderr}"
+        );
+    }
+
+    #[test]
+    fn test_stable_hash_generation() {
+        let global_cfg = Arc::new(GlobalConfig::default());
+        let path_buf = PathBuf::from("hermit.toml");
+        let config = HermitConfig::create_new(path_buf.as_path(), Arc::downgrade(&global_cfg));
+        let install_config = InstallConfig {
+            name: "Hello World".to_string(),
+            check: Some("true".to_string()),
+            ..Default::default()
+        };
+        let action = InstallAction::new(&install_config, &config).unwrap();
+        let id = id_from_hash(&action);
+        assert_eq!(
+            "hermitgrab::action::install::InstallAction:7370f721c8e5df3a",
+            &id
         );
     }
 }

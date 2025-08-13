@@ -46,6 +46,7 @@ jobs:
         with:
           cacheFrom: ghcr.io/karstenb/hermitgrab-devcontainer
           runCmd: |
+            cargo make llvm-cov
             cargo make build-linux-win
             cargo make pkg-linux-win
       

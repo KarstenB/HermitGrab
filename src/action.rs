@@ -97,7 +97,7 @@ pub trait Action: Send + Sync {
     fn get_order(&self) -> u64;
 }
 
-pub fn id_from_hash<T: Hash + Serialize>(item: &T) -> String {
+pub fn id_from_hash<T: Hash>(item: &T) -> String {
     let mut hash = Xxh3::new();
     item.hash(&mut hash);
     format!("{}:{:016x}", std::any::type_name::<T>(), hash.finish())

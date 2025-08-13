@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use tokio::task::JoinSet;
 
-use crate::action::{Action, ActionObserver, ArcAction};
+use crate::action::{Action, ActionObserver, Actions, ArcAction};
 use crate::config::{ArcHermitConfig, CliOptions, GlobalConfig, Tag};
 use crate::hermitgrab_error::ConfigError::HermitConfigNotAction;
 use crate::hermitgrab_error::{ActionError, ApplyError};
@@ -44,23 +44,23 @@ impl ExecutionPlan {
     }
 
     pub fn execute_actions(&self, observer: &Arc<impl ActionObserver>) -> Vec<ActionResult> {
+        let actions_by_order = self.get_actions_by_order();
         let mut results = Vec::new();
-        for (_, a) in self.actions.iter() {
-            observer.action_started(a);
-            let res = a.execute(observer);
-            observer.action_finished(a, &res);
-            results.push(ActionResult {
-                action: a.clone(),
-                result: res,
-            });
+        for (_, actions) in actions_by_order {
+            for a in actions {
+                observer.action_started(&a);
+                let res = a.execute(observer);
+                observer.action_finished(&a, &res);
+                results.push(ActionResult {
+                    action: a.clone(),
+                    result: res,
+                });
+            }
         }
         results
     }
 
-    pub async fn execute_actions_parallel(
-        &self,
-        observer: &Arc<impl ActionObserver + Sync + Send + 'static>,
-    ) -> Vec<ActionResult> {
+    fn get_actions_by_order(&self) -> BTreeMap<u64, Vec<Arc<Actions>>> {
         let mut actions_by_order = BTreeMap::new();
         for (_, a) in self.actions.iter() {
             let order = a.get_order();
@@ -69,6 +69,14 @@ impl ExecutionPlan {
                 .or_insert_with(Vec::new)
                 .push(a.clone());
         }
+        actions_by_order
+    }
+
+    pub async fn execute_actions_parallel(
+        &self,
+        observer: &Arc<impl ActionObserver + Sync + Send + 'static>,
+    ) -> Vec<ActionResult> {
+        let actions_by_order = self.get_actions_by_order();
         let mut results = Vec::new();
         for (_, actions) in actions_by_order {
             let mut tasks = JoinSet::new();

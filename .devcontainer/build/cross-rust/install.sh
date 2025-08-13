@@ -24,6 +24,7 @@ fi
 rustup target add aarch64-unknown-linux-musl
 rustup target add x86_64-unknown-linux-musl
 rustup target add x86_64-pc-windows-gnu
+rustup component add llvm-tools-preview
 apt-get update
 apt-get install -y --no-install-recommends musl-tools mingw-w64
 ARCH=$(uname -m)

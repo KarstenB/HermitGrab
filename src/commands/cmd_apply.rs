@@ -163,7 +163,12 @@ fn present_execution_plan(sorted: &ExecutionPlan, parallel: bool) {
     } else {
         hermitgrab_info!("Execution plan:");
     }
+    let mut last_order = 0;
     for (i, (_, a)) in sorted.iter().enumerate() {
+        if a.get_order() != last_order {
+            crate::order!("Start of {}", a.get_order());
+            last_order = a.get_order();
+        }
         crate::step!("[{:>2}] {}", i + 1, a.short_description());
     }
 }

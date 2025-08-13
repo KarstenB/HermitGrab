@@ -1,0 +1,78 @@
+{
+  "actions": {
+    "hermitgrab::action::install::InstallAction:24002bef552679d6": {
+      "Install": {
+        "check_cmd": null,
+        "install_cmd": "echo 0 >> $HOME/test_exec_order.log",
+        "name": "order 0",
+        "order": 0,
+        "output": null,
+        "requires": [
+          "+ordered"
+        ]
+      }
+    },
+    "hermitgrab::action::install::InstallAction:85c3f3d4203db2b4": {
+      "Install": {
+        "check_cmd": null,
+        "install_cmd": "echo 10 >> $HOME/test_exec_order.log",
+        "name": "order 10",
+        "order": 10,
+        "output": null,
+        "requires": [
+          "+ordered"
+        ]
+      }
+    },
+    "hermitgrab::action::install::InstallAction:d75961cbc910e203": {
+      "Install": {
+        "check_cmd": null,
+        "install_cmd": "echo 2 >> $HOME/test_exec_order.log",
+        "name": "order 2",
+        "order": 2,
+        "output": null,
+        "requires": [
+          "+ordered"
+        ]
+      }
+    },
+    "hermitgrab::action::install::InstallAction:dfb50dc2bc5b4471": {
+      "Install": {
+        "check_cmd": null,
+        "install_cmd": "echo 1 >> $HOME/test_exec_order.log",
+        "name": "order 1",
+        "order": 1,
+        "output": null,
+        "requires": [
+          "+ordered"
+        ]
+      }
+    }
+  },
+  "results": {
+    "hermitgrab::action::install::InstallAction:24002bef552679d6": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Install order 0"
+    },
+    "hermitgrab::action::install::InstallAction:85c3f3d4203db2b4": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Install order 10"
+    },
+    "hermitgrab::action::install::InstallAction:d75961cbc910e203": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Install order 2"
+    },
+    "hermitgrab::action::install::InstallAction:dfb50dc2bc5b4471": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Install order 1"
+    }
+  }
+}

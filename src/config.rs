@@ -41,7 +41,7 @@ impl Display for Source {
         match self {
             Source::Unknown => write!(f, "unknown"),
             Source::CommandLine => write!(f, "command line"),
-            Source::Detector(name) => write!(f, "detector: {}", name),
+            Source::Detector(name) => write!(f, "detector: {name}"),
             Source::BuiltInDetector => write!(f, "built-in detector"),
             Source::Config => write!(f, "config"),
         }
@@ -183,8 +183,8 @@ impl FromStr for RequireTag {
 impl Display for RequireTag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RequireTag::Positive(tag) => write!(f, "+{}", tag),
-            RequireTag::Negative(tag) => write!(f, "-{}", tag),
+            RequireTag::Positive(tag) => write!(f, "+{tag}"),
+            RequireTag::Negative(tag) => write!(f, "-{tag}"),
         }
     }
 }
@@ -195,8 +195,8 @@ impl Serialize for RequireTag {
         S: serde::Serializer,
     {
         let s = match self {
-            RequireTag::Positive(tag) => format!("+{}", tag),
-            RequireTag::Negative(tag) => format!("-{}", tag),
+            RequireTag::Positive(tag) => format!("+{tag}"),
+            RequireTag::Negative(tag) => format!("-{tag}"),
         };
         serializer.serialize_str(&s)
     }
@@ -505,7 +505,7 @@ impl FromStr for LinkType {
             "soft" | "symlink" => Ok(LinkType::Soft),
             "hard" | "hardlink" => Ok(LinkType::Hard),
             "copy" => Ok(LinkType::Copy),
-            _ => Err(format!("Unknown link type: {}", s)),
+            _ => Err(format!("Unknown link type: {s}")),
         }
     }
 }
@@ -830,8 +830,7 @@ pub trait ConfigItem {
     fn requires(&self) -> &BTreeSet<RequireTag>;
     fn order(&self) -> Option<u64>;
     fn total_order(&self, cfg: &HermitConfig) -> u64 {
-        let cfg_order = cfg.order.unwrap_or(0);
-        self.order().unwrap_or(0).max(cfg_order)
+        self.order().or(cfg.order).unwrap_or(0)
     }
     fn get_all_requires(&self, cfg: &HermitConfig) -> BTreeSet<RequireTag> {
         let mut requires = self.requires().clone();
@@ -880,7 +879,7 @@ impl GlobalConfig {
                     }
                 };
                 for tag in config.config_items().flat_map(|c| c.requires().iter()) {
-                    log::debug!("Adding required tag: {}", tag);
+                    log::debug!("Adding required tag: {tag}");
                     result.all_required_tags.insert(tag.clone());
                 }
                 for (k, v) in &config.snippets {
@@ -896,7 +895,7 @@ impl GlobalConfig {
                         ));
                         continue;
                     }
-                    log::debug!("Adding source {}: {}", k, v);
+                    log::debug!("Adding source {k}: {v}");
                     result.all_snippets.insert(k.to_lowercase(), v.clone());
                 }
                 for (k, v) in &config.detectors {
@@ -912,13 +911,13 @@ impl GlobalConfig {
                         ));
                         continue;
                     }
-                    log::debug!("Adding detector {}: {:?}", k, v);
+                    log::debug!("Adding detector {k}: {v:?}");
                     result.all_detectors.insert(k.to_lowercase(), v.clone());
                 }
                 // Collect profiles (error on duplicate, lower-case, dedup tags)
                 for (profile, tags) in &config.profiles {
                     let profile_lc = profile.to_lowercase();
-                    log::debug!("Adding profile {}: {:?}", profile_lc, tags);
+                    log::debug!("Adding profile {profile_lc}: {tags:?}");
                     if result.all_profiles.contains_key(&profile_lc) {
                         crate::error!(
                             "Duplicate profile '{}' in config file: {}",

@@ -10,9 +10,14 @@ pub fn hermitgrab_info(msg: &str) {
     println!("{} {}", "[hermitgrab]".bold().cyan(), msg.cyan());
 }
 
+pub fn order(msg: &str) {
+    println!("{} {}", "      [order]".bold().cyan(), msg.cyan());
+}
+
 pub fn step(msg: &str) {
     println!("{} {}", "      [step]".bold().cyan(), msg.cyan());
 }
+
 pub fn choice(msg: &str) {
     println!("{} {}", "    [choice]".bold().blue(), msg.blue());
 }
@@ -90,6 +95,12 @@ pub fn prompt(prompt: &str) -> Result<String, std::io::Error> {
 macro_rules! step {
     ($($arg:tt)*) => {
         $crate::common_cli::step(&format!($($arg)*))
+    };
+}
+#[macro_export]
+macro_rules! order {
+    ($($arg:tt)*) => {
+        $crate::common_cli::order(&format!($($arg)*))
     };
 }
 #[macro_export]
