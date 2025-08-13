@@ -11,7 +11,7 @@ pub fn hermitgrab_info(msg: &str) {
 }
 
 pub fn order(msg: &str) {
-    println!("{} {}", "      [order]".bold().cyan(), msg.cyan());
+    println!("{} {}", "     [order]".bold().cyan(), msg.cyan());
 }
 
 pub fn step(msg: &str) {
