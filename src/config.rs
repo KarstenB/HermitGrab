@@ -447,11 +447,26 @@ impl HermitConfig {
             );
         }
         let env_vars: BTreeMap<String, String> = std::env::vars().collect();
+        let sys_info: BTreeMap<String, String> = BTreeMap::from([
+            (
+                "cpu_num".to_string(),
+                sys_info::cpu_num()
+                    .map(|n| n.to_string())
+                    .unwrap_or_default(),
+            ),
+            (
+                "mem_total".to_string(),
+                sys_info::mem_info()
+                    .map(|m| m.total.to_string())
+                    .unwrap_or_default(),
+            ),
+        ]);
         let object = serde_json::json!({
             "dir": dir_map,
             "var": rendered_variables,
             "tag": all_tags,
             "env": env_vars,
+            "sys": sys_info,
         });
         let mut reg = Handlebars::new();
         reg.register_helper(

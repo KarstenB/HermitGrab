@@ -79,16 +79,6 @@ pub fn detect_builtin_tags() -> BTreeSet<Tag> {
         )),
         _ => false,
     };
-    tags.insert(Tag::new_with_value(
-        "num_cpus",
-        &get_num_cpus().to_string(),
-        crate::config::Source::BuiltInDetector,
-    ));
-    tags.insert(Tag::new_with_value(
-        "ram",
-        &get_ram().to_string(),
-        crate::config::Source::BuiltInDetector,
-    ));
     tags
 }
 
@@ -101,14 +91,6 @@ fn get_arch_alias() -> &'static str {
     arch_map
         .get(std::env::consts::ARCH)
         .unwrap_or(&std::env::consts::ARCH)
-}
-
-fn get_num_cpus() -> usize {
-    sys_info::cpu_num().unwrap_or(0) as usize
-}
-
-fn get_ram() -> u64 {
-    sys_info::mem_info().map(|m| m.total).unwrap_or(0)
 }
 
 fn get_hostname() -> Result<String, std::io::Error> {
