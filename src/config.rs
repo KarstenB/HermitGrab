@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, LazyLock, Weak};
 
 use clap::ValueEnum;
 use clap::builder::PossibleValue;
@@ -254,6 +254,72 @@ pub struct HermitConfig {
 
 pub type ArcHermitConfig = Arc<HermitConfig>;
 
+static STATE_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .state_dir()
+        .map(|x| x.display().to_string())
+});
+static CONFIG_DIR: LazyLock<String> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .config_dir()
+        .display()
+        .to_string()
+});
+static CONFIG_LOCAL_DIR: LazyLock<String> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .config_local_dir()
+        .to_path_buf()
+        .display()
+        .to_string()
+});
+static CACHE_DIR: LazyLock<String> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .cache_dir()
+        .to_path_buf()
+        .display()
+        .to_string()
+});
+static DATA_DIR: LazyLock<String> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .data_dir()
+        .to_path_buf()
+        .display()
+        .to_string()
+});
+static DATA_LOCAL_DIR: LazyLock<String> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .data_local_dir()
+        .to_path_buf()
+        .display()
+        .to_string()
+});
+static EXECUTABLE_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .executable_dir()
+        .map(|x| x.to_path_buf().display().to_string())
+});
+static PREFERENCE_DIR: LazyLock<String> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .preference_dir()
+        .to_path_buf()
+        .display()
+        .to_string()
+});
+static RUNTIME_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
+    directories::BaseDirs::new()
+        .expect("BaseDirs should init")
+        .runtime_dir()
+        .map(|x| x.display().to_string())
+});
+
 impl HermitConfig {
     pub fn create_new(path: &Path, global_cfg: Weak<GlobalConfig>) -> Self {
         HermitConfig {
@@ -321,7 +387,7 @@ impl HermitConfig {
         );
         let global_config = self.global_config();
         let home_dir = global_config.home_dir();
-        let dir_map: BTreeMap<&'static str, String> = BTreeMap::from_iter([
+        let mut paths = vec![
             (
                 "this",
                 self.directory()
@@ -347,34 +413,24 @@ impl HermitConfig {
                     .expect("PathBuf is correct")
                     .to_string(),
             ),
-            (
-                "xdg_config",
-                std::env::var("XDG_CONFIG_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".config"))
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-            (
-                "xdg_data",
-                std::env::var("XDG_DATA_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".local").join("share"))
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-            (
-                "xdg_state",
-                std::env::var("XDG_STATE_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".local").join("state"))
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-        ]);
+            ("xdg_config", CONFIG_DIR.clone()),
+            ("xdg_data", DATA_DIR.clone()),
+            ("xdg_cache", CACHE_DIR.clone()),
+            ("xdg_preference", PREFERENCE_DIR.clone()),
+            // These are windows specific LocalAppData equivalents
+            ("xdg_config_local", CONFIG_LOCAL_DIR.clone()),
+            ("xdg_data_local", DATA_LOCAL_DIR.clone()),
+        ];
+        if let Some(state_dir) = STATE_DIR.clone() {
+            paths.push(("xdg_state", state_dir));
+        }
+        if let Some(executable_dir) = EXECUTABLE_DIR.clone() {
+            paths.push(("xdg_executable", executable_dir));
+        }
+        if let Some(runtime_dir) = RUNTIME_DIR.clone() {
+            paths.push(("xdg_runtime", runtime_dir));
+        }
+        let dir_map: BTreeMap<&'static str, String> = BTreeMap::from_iter(paths);
         let all_tags: BTreeMap<String, String> = global_config
             .all_detected_tags()
             .iter()
@@ -390,10 +446,12 @@ impl HermitConfig {
                     .unwrap_or(value.to_string()),
             );
         }
+        let env_vars: BTreeMap<String, String> = std::env::vars().collect();
         let object = serde_json::json!({
             "dir": dir_map,
             "var": rendered_variables,
             "tag": all_tags,
+            "env": env_vars,
         });
         let mut reg = Handlebars::new();
         reg.register_helper(
@@ -425,33 +483,25 @@ impl HermitConfig {
         reg.render_template(&content, &object)
     }
 
-    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
+    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P, home_dir: &Path) -> PathBuf {
         let dir: PathBuf = dir.into();
         let dir_str = dir.to_string_lossy().to_string();
         let dir = self
             .render_handlebars(&dir_str, &BTreeMap::new())
             .unwrap_or(dir_str);
 
-        if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
-            dir.replace(
-                "~/.config",
-                &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
-            dir.replace(
-                "~/.local/share",
-                &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
-            dir.replace(
-                "~/.local/state",
-                &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
-            )
-            .into()
+        if dir.starts_with("~/.config") {
+            dir.replace("~/.config", &CONFIG_DIR).into()
+        } else if dir.starts_with("~/.local/share") {
+            dir.replace("~/.local/share", &DATA_DIR).into()
+        } else if dir.starts_with("~/.local/state")
+            && let Some(state) = STATE_DIR.clone()
+        {
+            dir.replace("~/.local/state", &state).into()
         } else {
-            shellexpand::tilde(&dir).into_owned().into()
+            shellexpand::tilde_with_context(&dir, || home_dir.to_str().map(|s| s.to_string()))
+                .into_owned()
+                .into()
         }
     }
 }

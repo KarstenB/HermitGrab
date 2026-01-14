@@ -45,7 +45,7 @@ impl LinkAction {
             .unwrap_or(&link_config.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.expand_directory(&link_config.target);
+        let dst = cfg.expand_directory(&link_config.target, cfg.global_config().home_dir());
         let rel_dst = dst
             .strip_prefix(cfg.global_config().home_dir())
             .unwrap_or(&dst)

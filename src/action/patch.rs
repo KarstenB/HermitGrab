@@ -40,7 +40,7 @@ impl PatchAction {
             .unwrap_or(&patch.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.expand_directory(&patch.target);
+        let dst = cfg.expand_directory(&patch.target, cfg.global_config().home_dir());
         let rel_dst = dst
             .strip_prefix(cfg.global_config().home_dir())
             .unwrap_or(&dst)
