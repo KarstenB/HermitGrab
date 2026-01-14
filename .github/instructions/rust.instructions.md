@@ -7,7 +7,7 @@ applyTo: '**/*.rs'
 * Use `cargo nextest run` to run tests.
 * For re-usable code use a crate specific <crate_name>Error enum defined in error.rs with `thiserror`.
 * Use `anyhow` for error handling in application code.
-* Use `serde_yml`instead of `serde_yaml` for YAML parsing.
+* Use `serde_yaml_ng`instead of `serde_yaml` for YAML parsing.
 * For format strings, use the "{varA}" syntax, instead of "{}", varA when possible.
 * Use `clap` derive for command line argument parsing.
 * Use `tokio` for async programming.

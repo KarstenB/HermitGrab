@@ -14,44 +14,45 @@ experimental = ["interactive"]
 interactive = [ "dep:ratatui" ]
 
 [dependencies]
-anyhow = "1.0.99"
-blake3 = { version = "1.8.2", features = ["mmap", "neon"] }
-clap = { version = "4.5.44", features = ["derive", "env"] }
+anyhow = "1.0.100"
+blake3 = { version = "1.8.3", features = ["mmap", "neon"] }
+clap = { version = "4.5.54", features = ["derive", "env"] }
 crossterm = "0.29.0"
 derive-where = "1.6.0"
 directories = "6.0.0"
 enum_dispatch = "0.3.13"
-git2 = { version = "0.20.2", features = [
+git2 = { version = "0.20.3", features = [
     "vendored-libgit2",
     "vendored-openssl"
 ] }
-handlebars = "6.3.2"
-hostname = "0.4.1"
+handlebars = "6.4.0"
+hostname = "0.4.2"
 itertools = "0.14.0"
-json-patch = "4.0.0"
-jsonc-parser = { version = "0.26.3", features = ["serde"] }
-log = "0.4.27"
+json-patch = "4.1.0"
+jsonc-parser = { version = "0.29.0", features = ["serde"] }
+log = "0.4.29"
 oauth2 = "5.0.0"
-octocrab = "0.44.1"
-os_info = "3.12.0"
-ratatui = { version = "0.29.0", features = ["crossterm"], optional = true}
+octocrab = "0.49.5"
+os_info = "3.14.0"
+ratatui = { version = "0.30.0", features = ["crossterm"], optional = true}
 secrecy = "0.10.3"
-serde = { version = "1.0.219", features = ["derive", "rc"] }
-serde_json = "1.0.142"
-serde_yml = "0.0.12"
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+serde_json = "1.0.149"
+serde_yaml_ng = "0.10.0"
 shellexpand = "3.1.1"
-simple_logger = "5.0.0"
+simple_logger = "5.1.0"
 strum = "0.27.2"
-tempfile = "3.20.0"
-thiserror = "2.0.14"
-tokio = { version = "1.47.1", features = ["full"] }
-toml = "0.9.5"
-toml_edit = { version = "0.23.3", features = ["serde"] }
-ubi = { version = "0.7.3", optional = true, features = ["logging"] }
+sys-info = "0.9.1"
+tempfile = "3.24.0"
+thiserror = "2.0.17"
+tokio = { version = "1.49.0", features = ["full"] }
+toml = "0.9.8"
+toml_edit = { version = "0.23.9", features = ["serde"] }
+ubi = { version = "0.9.0", optional = true, features = ["logging"] }
 # Fixed to 0.2.0 for ratatui compatability
-unicode-width = "0.2.0"
+unicode-width = "0.2.2"
 which = "8.0.0"
-whoami = "1.6.1"
+whoami = "2.0.2"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [profile.release]

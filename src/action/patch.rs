@@ -164,7 +164,7 @@ fn to_content(
 ) -> Result<String, PatchActionError> {
     match extension.as_deref() {
         Some("yaml") | Some("yml") => {
-            let yaml = serde_yml::to_string(&dst_json)?;
+            let yaml = serde_yaml_ng::to_string(&dst_json)?;
             Ok(yaml)
         }
         Some("toml") => {
@@ -184,7 +184,7 @@ fn parse_file(
 ) -> Result<serde_json::Value, PatchActionError> {
     match extension.as_deref() {
         Some("yaml") | Some("yml") => {
-            let yaml: serde_yml::Value = serde_yml::from_str(&dst_content)?;
+            let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(&dst_content)?;
             Ok(serde_json::to_value(yaml)?)
         }
         Some("toml") => {

@@ -73,7 +73,7 @@ pub enum PatchActionError {
     #[error(transparent)]
     Patch(#[from] json_patch::PatchError),
     #[error(transparent)]
-    YamlParse(#[from] serde_yml::Error),
+    YamlParse(#[from] serde_yaml_ng::Error),
     #[error(transparent)]
     TomlDeserialize(#[from] toml::de::Error),
     #[error(transparent)]
