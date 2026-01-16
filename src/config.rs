@@ -22,6 +22,7 @@ use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
 use crate::action::{Actions, ArcAction};
+use crate::config::handlebar_math::math_helper;
 use crate::debug;
 use crate::detector::{detect_builtin_tags, get_detected_tags};
 use crate::file_ops::dirs::*;
@@ -29,6 +30,8 @@ use crate::hermitgrab_error::{ApplyError, ConfigError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
+
+mod handlebar_math;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Source {
@@ -478,6 +481,7 @@ where
             },
         ),
     );
+    reg.register_helper("math", Box::new(math_helper));
     reg
 }
 
