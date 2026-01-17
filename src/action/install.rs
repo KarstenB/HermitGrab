@@ -169,7 +169,12 @@ pub fn execute_script(cmd: &str) -> Result<Output, std::io::Error> {
             }
             Ok(cmd_path)
         })
-        .and_then(|cmd| std::process::Command::new(&cmd).env("PATH", path).output())
+        .and_then(|cmd| {
+            std::process::Command::new("sh")
+                .arg(cmd)
+                .env("PATH", path)
+                .output()
+        })
 }
 
 #[cfg(not(feature = "ubi"))]
