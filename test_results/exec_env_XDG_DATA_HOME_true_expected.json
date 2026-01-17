@@ -1,0 +1,402 @@
+{
+  "actions": {
+    "LinkAction:completions/rustup.fish:.cache/fish/completions/rustup.fish_XDG_CACHE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.cache/fish/completions/rustup.fish_XDG_CACHE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.cache/fish/completions/rustup.fish_in_path_XDG_CACHE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.cache/fish/completions/rustup.fish_in_path_XDG_CACHE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.config/fish/completions/rustup.fish_XDG_CONFIG:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.config/fish/completions/rustup.fish_XDG_CONFIG",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.config/fish/completions/rustup.fish_in_path_XDG_CONFIG:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.config/fish/completions/rustup.fish_in_path_XDG_CONFIG",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.local/bin/fish/completions/rustup.fish_XDG_BIN:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/bin/fish/completions/rustup.fish_XDG_BIN",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.local/bin/fish/completions/rustup.fish_in_path_XDG_BIN:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/bin/fish/completions/rustup.fish_in_path_XDG_BIN",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.local/state/fish/completions/rustup.fish_XDG_STATE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/state/fish/completions/rustup.fish_XDG_STATE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:.local/state/fish/completions/rustup.fish_in_path_XDG_STATE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/state/fish/completions/rustup.fish_in_path_XDG_STATE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:XDG_DATA_HOME/fish/completions/rustup.fish_XDG_DATA:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/XDG_DATA_HOME/fish/completions/rustup.fish_XDG_DATA",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:XDG_DATA_HOME/fish/completions/rustup.fish_in_path_XDG_DATA:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/XDG_DATA_HOME/fish/completions/rustup.fish_in_path_XDG_DATA",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:completions/rustup.fish:xdg_runtime_dir_default/fish/completions/rustup.fish_XDG_RUNTIME:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/xdg_runtime_dir_default/fish/completions/rustup.fish_XDG_RUNTIME",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+      }
+    },
+    "LinkAction:config.fish:.cache/fish/config.fish_XDG_CACHE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.cache/fish/config.fish_XDG_CACHE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.cache/fish/config.fish_in_path_XDG_CACHE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.cache/fish/config.fish_in_path_XDG_CACHE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.config/fish/config.fish_XDG_CONFIG:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.config/fish/config.fish_XDG_CONFIG",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.config/fish/config.fish_in_path_XDG_CONFIG:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.config/fish/config.fish_in_path_XDG_CONFIG",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.local/bin/fish/config.fish_XDG_BIN:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/bin/fish/config.fish_XDG_BIN",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.local/bin/fish/config.fish_in_path_XDG_BIN:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/bin/fish/config.fish_in_path_XDG_BIN",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.local/state/fish/config.fish_XDG_STATE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/state/fish/config.fish_XDG_STATE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:.local/state/fish/config.fish_in_path_XDG_STATE:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/.local/state/fish/config.fish_in_path_XDG_STATE",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:XDG_DATA_HOME/fish/config.fish_XDG_DATA:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/XDG_DATA_HOME/fish/config.fish_XDG_DATA",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:XDG_DATA_HOME/fish/config.fish_in_path_XDG_DATA:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/XDG_DATA_HOME/fish/config.fish_in_path_XDG_DATA",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    },
+    "LinkAction:config.fish:xdg_runtime_dir_default/fish/config.fish_XDG_RUNTIME:soft:abort:+xdg_test": {
+      "Link": {
+        "dst": "TEMP_DIR/xdg_runtime_dir_default/fish/config.fish_XDG_RUNTIME",
+        "fallback": "Abort",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+xdg_test"
+        ],
+        "src": "TEMP_DIR/.hermitgrab/config.fish"
+      }
+    }
+  },
+  "results": {
+    "LinkAction:completions/rustup.fish:.cache/fish/completions/rustup.fish_XDG_CACHE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .cache/fish/completions/rustup.fish_XDG_CACHE"
+    },
+    "LinkAction:completions/rustup.fish:.cache/fish/completions/rustup.fish_in_path_XDG_CACHE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .cache/fish/completions/rustup.fish_in_path_XDG_CACHE"
+    },
+    "LinkAction:completions/rustup.fish:.config/fish/completions/rustup.fish_XDG_CONFIG:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .config/fish/completions/rustup.fish_XDG_CONFIG"
+    },
+    "LinkAction:completions/rustup.fish:.config/fish/completions/rustup.fish_in_path_XDG_CONFIG:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .config/fish/completions/rustup.fish_in_path_XDG_CONFIG"
+    },
+    "LinkAction:completions/rustup.fish:.local/bin/fish/completions/rustup.fish_XDG_BIN:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .local/bin/fish/completions/rustup.fish_XDG_BIN"
+    },
+    "LinkAction:completions/rustup.fish:.local/bin/fish/completions/rustup.fish_in_path_XDG_BIN:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .local/bin/fish/completions/rustup.fish_in_path_XDG_BIN"
+    },
+    "LinkAction:completions/rustup.fish:.local/state/fish/completions/rustup.fish_XDG_STATE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .local/state/fish/completions/rustup.fish_XDG_STATE"
+    },
+    "LinkAction:completions/rustup.fish:.local/state/fish/completions/rustup.fish_in_path_XDG_STATE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> .local/state/fish/completions/rustup.fish_in_path_XDG_STATE"
+    },
+    "LinkAction:completions/rustup.fish:XDG_DATA_HOME/fish/completions/rustup.fish_XDG_DATA:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> XDG_DATA_HOME/fish/completions/rustup.fish_XDG_DATA"
+    },
+    "LinkAction:completions/rustup.fish:XDG_DATA_HOME/fish/completions/rustup.fish_in_path_XDG_DATA:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> XDG_DATA_HOME/fish/completions/rustup.fish_in_path_XDG_DATA"
+    },
+    "LinkAction:completions/rustup.fish:xdg_runtime_dir_default/fish/completions/rustup.fish_XDG_RUNTIME:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink completions/rustup.fish -> xdg_runtime_dir_default/fish/completions/rustup.fish_XDG_RUNTIME"
+    },
+    "LinkAction:config.fish:.cache/fish/config.fish_XDG_CACHE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .cache/fish/config.fish_XDG_CACHE"
+    },
+    "LinkAction:config.fish:.cache/fish/config.fish_in_path_XDG_CACHE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .cache/fish/config.fish_in_path_XDG_CACHE"
+    },
+    "LinkAction:config.fish:.config/fish/config.fish_XDG_CONFIG:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .config/fish/config.fish_XDG_CONFIG"
+    },
+    "LinkAction:config.fish:.config/fish/config.fish_in_path_XDG_CONFIG:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .config/fish/config.fish_in_path_XDG_CONFIG"
+    },
+    "LinkAction:config.fish:.local/bin/fish/config.fish_XDG_BIN:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .local/bin/fish/config.fish_XDG_BIN"
+    },
+    "LinkAction:config.fish:.local/bin/fish/config.fish_in_path_XDG_BIN:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .local/bin/fish/config.fish_in_path_XDG_BIN"
+    },
+    "LinkAction:config.fish:.local/state/fish/config.fish_XDG_STATE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .local/state/fish/config.fish_XDG_STATE"
+    },
+    "LinkAction:config.fish:.local/state/fish/config.fish_in_path_XDG_STATE:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> .local/state/fish/config.fish_in_path_XDG_STATE"
+    },
+    "LinkAction:config.fish:XDG_DATA_HOME/fish/config.fish_XDG_DATA:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> XDG_DATA_HOME/fish/config.fish_XDG_DATA"
+    },
+    "LinkAction:config.fish:XDG_DATA_HOME/fish/config.fish_in_path_XDG_DATA:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> XDG_DATA_HOME/fish/config.fish_in_path_XDG_DATA"
+    },
+    "LinkAction:config.fish:xdg_runtime_dir_default/fish/config.fish_XDG_RUNTIME:soft:abort:+xdg_test": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink config.fish -> xdg_runtime_dir_default/fish/config.fish_XDG_RUNTIME"
+    }
+  }
+}

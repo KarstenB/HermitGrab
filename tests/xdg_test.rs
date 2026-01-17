@@ -48,48 +48,83 @@ fn read_global_config(hermit_root: &Path) -> Arc<GlobalConfig> {
 
 #[tokio::test]
 async fn xdg_cache() {
-    test_env_subst("XDG_CACHE_HOME").await
+    test_env_subst("XDG_CACHE_HOME", false).await
+}
+#[tokio::test]
+async fn xdg_cache_clean() {
+    test_env_subst("XDG_CACHE_HOME", true).await
 }
 
 #[tokio::test]
 async fn xdg_config() {
-    test_env_subst("XDG_CONFIG_HOME").await
+    test_env_subst("XDG_CONFIG_HOME", false).await
+}
+#[tokio::test]
+async fn xdg_config_clean() {
+    test_env_subst("XDG_CONFIG_HOME", true).await
 }
 
 #[tokio::test]
 async fn xdg_data() {
-    test_env_subst("XDG_DATA_HOME").await
+    test_env_subst("XDG_DATA_HOME", false).await
+}
+#[tokio::test]
+async fn xdg_data_clean() {
+    test_env_subst("XDG_DATA_HOME", true).await
 }
 
 #[tokio::test]
 async fn xdg_executable() {
-    test_env_subst("XDG_BIN_HOME").await
+    test_env_subst("XDG_BIN_HOME", false).await
+}
+#[tokio::test]
+async fn xdg_executable_clean() {
+    test_env_subst("XDG_BIN_HOME", true).await
 }
 
 #[tokio::test]
 async fn xdg_runtime() {
-    test_env_subst("XDG_RUNTIME_DIR").await
+    test_env_subst("XDG_RUNTIME_DIR", false).await
+}
+#[tokio::test]
+async fn xdg_runtime_clean() {
+    test_env_subst("XDG_RUNTIME_DIR", true).await
 }
 
 #[tokio::test]
 async fn xdg_state() {
-    test_env_subst("XDG_STATE_HOME").await
+    test_env_subst("XDG_STATE_HOME", false).await
+}
+#[tokio::test]
+async fn xdg_state_clean() {
+    test_env_subst("XDG_STATE_HOME", true).await
 }
 
-async fn test_env_subst(env_name: &str) {
+async fn test_env_subst(env_name: &str, clean: bool) {
     let temp = TempDir::new().unwrap();
     let temp_path = temp.path();
     let temp_str = temp_path.to_str().unwrap();
     let _env_lock = ENV_LOCK.lock().await;
     unsafe {
         std::env::set_var("HOME", temp_path);
-        std::env::set_var("XDG_HOME", temp_path);
-        std::env::set_var("XDG_CACHE_HOME", temp_path.join("xdg_cache_dir"));
-        std::env::set_var("XDG_CONFIG_HOME", temp_path.join("xdg_config_dir"));
-        std::env::set_var("XDG_DATA_HOME", temp_path.join("xdg_data_dir"));
-        std::env::set_var("XDG_BIN_HOME", temp_path.join("xdg_bin_dir"));
-        std::env::set_var("XDG_RUNTIME_DIR", temp_path.join("xdg_runtime_dir"));
-        std::env::set_var("XDG_STATE_HOME", temp_path.join("xdg_state_dir"));
+        if clean {
+            std::env::remove_var("XDG_HOME");
+            std::env::remove_var("XDG_CACHE_HOME");
+            std::env::remove_var("XDG_CONFIG_HOME");
+            std::env::remove_var("XDG_DATA_HOME");
+            std::env::remove_var("XDG_BIN_HOME");
+            // std::env::remove_var("XDG_RUNTIME_DIR");
+            std::env::set_var("XDG_RUNTIME_DIR", temp_path.join("xdg_runtime_dir_default"));
+            std::env::remove_var("XDG_STATE_HOME");
+        } else {
+            std::env::set_var("XDG_HOME", temp_path);
+            std::env::set_var("XDG_CACHE_HOME", temp_path.join("xdg_cache_dir"));
+            std::env::set_var("XDG_CONFIG_HOME", temp_path.join("xdg_config_dir"));
+            std::env::set_var("XDG_DATA_HOME", temp_path.join("xdg_data_dir"));
+            std::env::set_var("XDG_BIN_HOME", temp_path.join("xdg_bin_dir"));
+            std::env::set_var("XDG_RUNTIME_DIR", temp_path.join("xdg_runtime_dir"));
+            std::env::set_var("XDG_STATE_HOME", temp_path.join("xdg_state_dir"));
+        }
         std::env::set_var(env_name, temp_path.join(env_name));
     }
     let hermit_root = temp_path.join(".hermitgrab");
@@ -105,8 +140,8 @@ async fn test_env_subst(env_name: &str) {
     std::fs::create_dir_all(&completions_dir).unwrap();
     let rustup_fish = cargo_root.join("tests/test_xdg_variables/completions/rustup.fish");
     std::fs::copy(rustup_fish, completions_dir.join("rustup.fish")).unwrap();
-    let expected = test_results.join(format!("exec_env_{}_expected.json", env_name));
-    let actual = test_results.join(format!("exec_env_{}_actual.json", env_name));
+    let expected = test_results.join(format!("exec_env_{env_name}_{clean}_expected.json"));
+    let actual = test_results.join(format!("exec_env_{env_name}_{clean}_actual.json"));
     commands::execute(
         Commands::Apply {
             tags: vec!["xdg_test".to_string()],
