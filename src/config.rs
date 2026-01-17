@@ -443,7 +443,7 @@ where
     'v: 'cfg,
 {
     let mut reg = Handlebars::new();
-    reg.set_strict_mode(true);
+    //reg.set_strict_mode(true);
     reg.register_helper(
         "snippet",
         Box::new(
