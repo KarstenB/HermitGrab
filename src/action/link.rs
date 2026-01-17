@@ -283,10 +283,11 @@ mod tests {
             fs::remove_dir_all(&src).unwrap();
         }
         fs::create_dir(&src).unwrap();
+        fs::write(src.join("file1.txt"), b"file 1").unwrap();
         link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort).unwrap();
         assert!(dst.exists());
         assert!(dst.is_symlink());
-        assert!(dst.read_link().unwrap() == src);
+        assert_eq!(dst.read_link().unwrap(), src.canonicalize().unwrap());
         fs::remove_dir_all(&src).unwrap();
         fs::remove_dir_all(&dst).unwrap();
     }

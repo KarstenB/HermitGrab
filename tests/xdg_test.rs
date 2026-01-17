@@ -18,7 +18,7 @@ fn read_json<P: AsRef<Path>>(path: P, temp_dir: &str) -> serde_json::Value {
     let data = fs::read_to_string(path).expect("Failed to read file");
     let data = data
         .replace(temp_dir, "TEMP_DIR")
-        .replace("privateTEMP_DIR", "TEMP_DIR");
+        .replace("/privateTEMP_DIR", "TEMP_DIR");
     serde_json::from_str(&data).expect("Failed to parse JSON")
 }
 
