@@ -352,7 +352,7 @@ impl HermitConfig {
             "sys": sys_info,
         });
         let reg = create_handlebars(variables, cfg);
-        reg.render_template(&content, &object)
+        reg.render_template(content, &object)
     }
 
     fn collect_dir_map(&self, global_config: &Arc<GlobalConfig>) -> BTreeMap<&'static str, String> {
@@ -1082,15 +1082,15 @@ pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     if root.is_file() && root.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
         result.push(root.to_path_buf());
-    } else if root.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    result.extend(find_hermit_files(&path));
-                } else if path.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
-                    result.push(path);
-                }
+    } else if root.is_dir()
+        && let Ok(entries) = std::fs::read_dir(root)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                result.extend(find_hermit_files(&path));
+            } else if path.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
+                result.push(path);
             }
         }
     }

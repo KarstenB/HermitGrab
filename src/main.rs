@@ -37,14 +37,14 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
         let path_buf = std::env::current_exe().ok();
         if let Some(exe) = path_buf {
             let exe_dir = exe.parent();
-            if let Some(exe_dir) = exe_dir {
-                if exe_dir.join(CONF_FILE_NAME).exists() {
-                    hermitgrab_info!(
-                        "Using hermit directory beside executable {}",
-                        dotfiles_dir.display()
-                    );
-                    return exe_dir.to_path_buf();
-                }
+            if let Some(exe_dir) = exe_dir
+                && exe_dir.join(CONF_FILE_NAME).exists()
+            {
+                hermitgrab_info!(
+                    "Using hermit directory beside executable {}",
+                    dotfiles_dir.display()
+                );
+                return exe_dir.to_path_buf();
             }
         }
     }

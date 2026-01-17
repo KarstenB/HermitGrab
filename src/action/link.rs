@@ -37,7 +37,7 @@ impl LinkAction {
     ) -> Result<Self, std::io::Error> {
         let src = match cfg.expand_directory(&link_config.source) {
             Ok(path) => path,
-            Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+            Err(e) => return Err(std::io::Error::other(e)),
         };
         let src = if src.is_absolute() {
             link_config.source.clone()
@@ -58,7 +58,7 @@ impl LinkAction {
             .to_string();
         let dst = match cfg.expand_directory(&link_config.target) {
             Ok(path) => path,
-            Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+            Err(e) => return Err(std::io::Error::other(e)),
         };
         let rel_dst = dst
             .strip_prefix(BASE_DIRS.home_dir())

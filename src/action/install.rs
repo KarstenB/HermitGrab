@@ -51,11 +51,11 @@ impl InstallAction {
             let status = execute_script(check_cmd);
             // We ignore errors here which may be caused by the command not being found
             // or other issues, as we only care about successful execution.
-            if let Ok(output) = status {
-                if output.status.success() {
-                    self.update_output(check_cmd, output, "check_cmd")?;
-                    return Ok(false);
-                }
+            if let Ok(output) = status
+                && output.status.success()
+            {
+                self.update_output(check_cmd, output, "check_cmd")?;
+                return Ok(false);
             }
         }
         Ok(true)

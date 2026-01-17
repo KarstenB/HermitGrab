@@ -72,11 +72,10 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
         }
     }
     let dst_parent = dst_clone.parent();
-    if let Some(dst_parent) = dst_parent {
-        if !dst_parent.exists() {
-            std::fs::create_dir_all(dst_parent)
-                .map_err(|e| FileOpsError::Io(dst_parent.into(), e))?;
-        }
+    if let Some(dst_parent) = dst_parent
+        && !dst_parent.exists()
+    {
+        std::fs::create_dir_all(dst_parent).map_err(|e| FileOpsError::Io(dst_parent.into(), e))?;
     }
     match link_type {
         LinkType::Soft => {
@@ -103,10 +102,10 @@ pub fn link_files<P: AsRef<Path>, Q: AsRef<Path>>(
 
 pub fn copy(src: &Path, dst: &Path) -> Result<(), FileOpsError> {
     if src.is_file() {
-        if let Some(parent) = dst.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| FileOpsError::Io(parent.into(), e))?;
-            }
+        if let Some(parent) = dst.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| FileOpsError::Io(parent.into(), e))?;
         }
         std::fs::copy(src, dst).map_err(|e| FileOpsError::Io(dst.into(), e))?;
     } else {

@@ -111,11 +111,11 @@ async fn github_find_hermitgrab_topic_repos(
         .await?;
     let mut found_repos = vec![];
     for repo in my_repos {
-        if let Some(ref topics) = repo.topics {
-            if topics.iter().any(|t| t.to_lowercase() == "hermitgrab") {
-                found_repos.push(repo.clone());
-                continue;
-            }
+        if let Some(ref topics) = repo.topics
+            && topics.iter().any(|t| t.to_lowercase() == "hermitgrab")
+        {
+            found_repos.push(repo.clone());
+            continue;
         }
         if repo.name == "dotfiles" {
             found_repos.push(repo.clone());
@@ -182,10 +182,10 @@ pub fn create_local_repo(global_config: &Arc<GlobalConfig>) -> Result<(), Discov
         "Creating empty local dotfiles repo in {}",
         hermit_dir.display()
     );
-    if let Some(hermit_parent) = hermit_dir.parent() {
-        if !hermit_parent.exists() {
-            std::fs::create_dir_all(hermit_parent)?;
-        }
+    if let Some(hermit_parent) = hermit_dir.parent()
+        && !hermit_parent.exists()
+    {
+        std::fs::create_dir_all(hermit_parent)?;
     }
     Repository::init(hermit_dir)?;
     success!("Initialized empty repository at {}", hermit_dir.display());

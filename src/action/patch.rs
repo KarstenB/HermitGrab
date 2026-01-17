@@ -32,7 +32,7 @@ impl PatchAction {
     pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Result<Self, std::io::Error> {
         let src = match cfg.expand_directory(&patch.source) {
             Ok(path) => path,
-            Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+            Err(e) => return Err(std::io::Error::other(e)),
         };
         let src = if src.is_absolute() {
             patch.source.clone()
@@ -47,7 +47,7 @@ impl PatchAction {
             .to_string();
         let dst = match cfg.expand_directory(&patch.target) {
             Ok(path) => path,
-            Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+            Err(e) => return Err(std::io::Error::other(e)),
         };
         let rel_dst = dst
             .strip_prefix(BASE_DIRS.home_dir())
