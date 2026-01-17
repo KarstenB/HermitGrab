@@ -32,7 +32,7 @@ pub enum FileOpsError {
 pub enum ConfigError {
     #[error("Redeclaration of source: {0} found in file {1}")]
     DuplicateSource(String, PathBuf),
-    #[error("An error occurred while handling the configuration file {1}: {0}")]
+    #[error("An error occurred while handling the file {1}: {0}")]
     Io(std::io::Error, PathBuf),
     #[error("An error occurred while parsing the configuration file {1}: {0}")]
     DeserializeToml(toml::de::Error, PathBuf),

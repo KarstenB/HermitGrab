@@ -190,3 +190,132 @@ pub fn hash_file(path: &Path) -> Result<blake3::Hash, std::io::Error> {
     hasher.update_mmap(path)?;
     Ok(hasher.finalize())
 }
+
+#[cfg(not(debug_assertions))]
+pub use std::sync::LazyLock;
+
+#[cfg(debug_assertions)]
+pub struct LazyLock<T: 'static, F: 'static = fn() -> T>
+where
+    F: Fn() -> T,
+{
+    init: F,
+}
+
+#[cfg(debug_assertions)]
+impl<T: 'static, F: 'static> LazyLock<T, F>
+where
+    F: Fn() -> T,
+{
+    pub const fn new(init: F) -> Self {
+        Self { init }
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<T: 'static, F: 'static> std::ops::Deref for LazyLock<T, F>
+where
+    F: Fn() -> T,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        // In tests, we use a leaked Box to create a stable reference
+        // This will recompute on each access and leak memory, but that's OK for tests
+        let value = Box::new((self.init)());
+        Box::leak(value)
+    }
+}
+
+pub mod dirs {
+    use super::LazyLock;
+
+    pub static BASE_DIRS: LazyLock<directories::BaseDirs, fn() -> directories::BaseDirs> =
+        LazyLock::new(|| directories::BaseDirs::new().expect("BaseDirs should init"));
+
+    pub static HOME_DIR: LazyLock<String> =
+        LazyLock::new(|| BASE_DIRS.home_dir().to_path_buf().display().to_string());
+    /// XDG_HOME env or $HOME
+    pub static XDG_HOME: LazyLock<String> =
+        LazyLock::new(|| std::env::var("XDG_HOME").unwrap_or_else(|_| HOME_DIR.clone()));
+
+    pub static STATE_DIR: LazyLock<Option<String>> =
+        LazyLock::new(|| BASE_DIRS.state_dir().map(|x| x.display().to_string()));
+    /// XDG_STATE_HOME env or ~/.local/state
+    pub static XDG_STATE_HOME: LazyLock<String> = LazyLock::new(|| {
+        std::env::var("XDG_STATE_HOME").unwrap_or_else(|_| {
+            BASE_DIRS
+                .home_dir()
+                .join(".local/state")
+                .display()
+                .to_string()
+        })
+    });
+    pub static CONFIG_DIR: LazyLock<String> =
+        LazyLock::new(|| BASE_DIRS.config_dir().display().to_string());
+    /// XDG_CONFIG_HOME env or ~/.config
+    pub static XDG_CONFIG_HOME: LazyLock<String> = LazyLock::new(|| {
+        std::env::var("XDG_CONFIG_HOME")
+            .unwrap_or_else(|_| BASE_DIRS.home_dir().join(".config").display().to_string())
+    });
+    pub static CONFIG_LOCAL_DIR: LazyLock<String> = LazyLock::new(|| {
+        BASE_DIRS
+            .config_local_dir()
+            .to_path_buf()
+            .display()
+            .to_string()
+    });
+    pub static CACHE_DIR: LazyLock<String> =
+        LazyLock::new(|| BASE_DIRS.cache_dir().to_path_buf().display().to_string());
+    /// XDG_CACHE_HOME env or ~/.cache
+    pub static XDG_CACHE_HOME: LazyLock<String> = LazyLock::new(|| {
+        std::env::var("XDG_CACHE_HOME")
+            .unwrap_or_else(|_| BASE_DIRS.home_dir().join(".cache").display().to_string())
+    });
+    pub static DATA_DIR: LazyLock<String> =
+        LazyLock::new(|| BASE_DIRS.data_dir().to_path_buf().display().to_string());
+    /// XDG_DATA_HOME env or ~/.local/share
+    pub static XDG_DATA_HOME: LazyLock<String> = LazyLock::new(|| {
+        std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+            BASE_DIRS
+                .home_dir()
+                .join(".local/share")
+                .display()
+                .to_string()
+        })
+    });
+    pub static DATA_LOCAL_DIR: LazyLock<String> = LazyLock::new(|| {
+        BASE_DIRS
+            .data_local_dir()
+            .to_path_buf()
+            .display()
+            .to_string()
+    });
+    pub static EXECUTABLE_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
+        BASE_DIRS
+            .executable_dir()
+            .map(|x| x.to_path_buf().display().to_string())
+    });
+    /// XDG_BIN_HOME env or ~/.local/bin
+    pub static XDG_BIN_HOME: LazyLock<String> = LazyLock::new(|| {
+        std::env::var("XDG_BIN_HOME").unwrap_or_else(|_| {
+            BASE_DIRS
+                .home_dir()
+                .join(".local/bin")
+                .display()
+                .to_string()
+        })
+    });
+    pub static PREFERENCE_DIR: LazyLock<String> = LazyLock::new(|| {
+        BASE_DIRS
+            .preference_dir()
+            .to_path_buf()
+            .display()
+            .to_string()
+    });
+    pub static RUNTIME_DIR: LazyLock<Option<String>> =
+        LazyLock::new(|| BASE_DIRS.runtime_dir().map(|x| x.display().to_string()));
+    /// XDG_RUNTIME_DIR env or None
+    pub static XDG_RUNTIME_DIR: LazyLock<Option<String>> =
+        LazyLock::new(|| std::env::var("XDG_RUNTIME_DIR").ok());
+}

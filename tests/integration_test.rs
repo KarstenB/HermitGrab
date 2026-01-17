@@ -66,8 +66,8 @@ fn assert_file_equals<P: AsRef<Path>>(path: P, content: &str) {
     assert_eq!(content, data);
 }
 
-fn read_global_config(temp_path: &Path, hermit_root: &Path) -> Arc<GlobalConfig> {
-    GlobalConfig::from_paths(hermit_root, temp_path, &find_hermit_files(hermit_root)).unwrap()
+fn read_global_config(hermit_root: &Path) -> Arc<GlobalConfig> {
+    GlobalConfig::from_paths(hermit_root, &find_hermit_files(hermit_root)).unwrap()
 }
 
 #[tokio::test]
@@ -75,7 +75,7 @@ async fn smoke_test() {
     let temp = TempDir::new().unwrap();
     let temp_path = temp.path();
     let temp_str = temp_path.to_str().unwrap();
-    let _env_lock = ENV_LOCK.lock();
+    let _env_lock = ENV_LOCK.lock().await;
     unsafe {
         std::env::set_var("HOME", temp_path);
     }
@@ -88,7 +88,7 @@ async fn smoke_test() {
         Commands::Init {
             init_command: commands::InitCommand::Create,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -111,7 +111,7 @@ async fn smoke_test() {
                 order: None,
             },
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -127,7 +127,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Config,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -150,7 +150,7 @@ async fn smoke_test() {
                 order: None,
             },
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -165,7 +165,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Config,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -190,7 +190,7 @@ async fn smoke_test() {
                 order: None,
             },
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -205,7 +205,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Config,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -224,7 +224,7 @@ async fn smoke_test() {
             profile: None,
             extensive: false,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -242,7 +242,7 @@ async fn smoke_test() {
                 tags: vec!["hello".parse().unwrap(), "test1".parse().unwrap()],
             },
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -257,7 +257,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Config,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -273,7 +273,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Tags,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -287,7 +287,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Profiles,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -307,7 +307,7 @@ async fn smoke_test() {
             force: false,
             parallel: false,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -328,7 +328,7 @@ async fn smoke_test() {
             force: true,
             parallel: true,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -355,7 +355,7 @@ async fn smoke_test() {
             profile: Some("testProfile".to_string()),
             extensive: false,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -383,7 +383,7 @@ async fn smoke_test() {
                 order: Some(10),
             },
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -397,7 +397,7 @@ async fn smoke_test() {
         Commands::Get {
             get_command: GetCommand::Config,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -420,7 +420,7 @@ async fn smoke_test() {
             force: false,
             parallel: false,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         false,
         false,
@@ -449,7 +449,7 @@ async fn ordered_test(parallel: bool) {
     let temp = TempDir::new().unwrap();
     let temp_path = temp.path();
     let temp_str = temp_path.to_str().unwrap();
-    let _env_lock = ENV_LOCK.lock();
+    let _env_lock = ENV_LOCK.lock().await;
     unsafe {
         std::env::set_var("HOME", temp_path);
     }
@@ -470,7 +470,7 @@ async fn ordered_test(parallel: bool) {
             force: false,
             parallel,
         },
-        read_global_config(temp_path, &hermit_root),
+        read_global_config(&hermit_root),
         true,
         true,
         false,

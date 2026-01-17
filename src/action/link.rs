@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::action::{Action, ActionObserver, Status};
 use crate::config::{ConfigItem, FallbackOperation, FileStatus};
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::file_ops::{check_copied, link_files};
 use crate::hermitgrab_error::{ActionError, LinkActionError};
 use crate::{HermitConfig, LinkConfig, LinkType, RequireTag};
@@ -39,15 +40,21 @@ impl LinkAction {
         } else {
             cfg.directory().join(&link_config.source)
         };
+        if !src.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Source file does not exist: {}", src.display()),
+            ));
+        }
         let src = src.canonicalize()?;
         let rel_src = src
             .strip_prefix(cfg.directory())
             .unwrap_or(&link_config.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.expand_directory(&link_config.target, cfg.global_config().home_dir());
+        let dst = cfg.expand_directory(&link_config.target);
         let rel_dst = dst
-            .strip_prefix(cfg.global_config().home_dir())
+            .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();

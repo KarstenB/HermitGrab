@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::action::{Action, ActionObserver, ActionOutput, Status};
 use crate::config::{ConfigItem, PatchConfig, PatchType};
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::{ActionError, PatchActionError};
 use crate::{HermitConfig, RequireTag};
 
@@ -40,9 +41,9 @@ impl PatchAction {
             .unwrap_or(&patch.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.expand_directory(&patch.target, cfg.global_config().home_dir());
+        let dst = cfg.expand_directory(&patch.target);
         let rel_dst = dst
-            .strip_prefix(cfg.global_config().home_dir())
+            .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();

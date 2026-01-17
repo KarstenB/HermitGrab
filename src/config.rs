@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Weak};
+use std::sync::{Arc, Weak};
 
 use clap::ValueEnum;
 use clap::builder::PossibleValue;
@@ -22,7 +22,9 @@ use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
 use crate::action::{Actions, ArcAction};
+use crate::debug;
 use crate::detector::{detect_builtin_tags, get_detected_tags};
+use crate::file_ops::dirs::*;
 use crate::hermitgrab_error::{ApplyError, ConfigError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
@@ -254,72 +256,6 @@ pub struct HermitConfig {
 
 pub type ArcHermitConfig = Arc<HermitConfig>;
 
-static STATE_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .state_dir()
-        .map(|x| x.display().to_string())
-});
-static CONFIG_DIR: LazyLock<String> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .config_dir()
-        .display()
-        .to_string()
-});
-static CONFIG_LOCAL_DIR: LazyLock<String> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .config_local_dir()
-        .to_path_buf()
-        .display()
-        .to_string()
-});
-static CACHE_DIR: LazyLock<String> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .cache_dir()
-        .to_path_buf()
-        .display()
-        .to_string()
-});
-static DATA_DIR: LazyLock<String> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .data_dir()
-        .to_path_buf()
-        .display()
-        .to_string()
-});
-static DATA_LOCAL_DIR: LazyLock<String> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .data_local_dir()
-        .to_path_buf()
-        .display()
-        .to_string()
-});
-static EXECUTABLE_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .executable_dir()
-        .map(|x| x.to_path_buf().display().to_string())
-});
-static PREFERENCE_DIR: LazyLock<String> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .preference_dir()
-        .to_path_buf()
-        .display()
-        .to_string()
-});
-static RUNTIME_DIR: LazyLock<Option<String>> = LazyLock::new(|| {
-    directories::BaseDirs::new()
-        .expect("BaseDirs should init")
-        .runtime_dir()
-        .map(|x| x.display().to_string())
-});
-
 impl HermitConfig {
     pub fn create_new(path: &Path, global_cfg: Weak<GlobalConfig>) -> Self {
         HermitConfig {
@@ -381,12 +317,7 @@ impl HermitConfig {
         content: &str,
         variables: &BTreeMap<String, String>,
     ) -> Result<String, handlebars::RenderError> {
-        let content = content.replace(
-            "~",
-            self.global_config().home_dir().to_str().unwrap_or(content),
-        );
         let global_config = self.global_config();
-        let home_dir = global_config.home_dir();
         let mut paths = vec![
             (
                 "this",
@@ -405,30 +336,37 @@ impl HermitConfig {
                     .expect("PathBuf is correct")
                     .to_string(),
             ),
-            (
-                "home",
-                home_dir
-                    .to_path_buf()
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-            ("xdg_config", CONFIG_DIR.clone()),
-            ("xdg_data", DATA_DIR.clone()),
-            ("xdg_cache", CACHE_DIR.clone()),
-            ("xdg_preference", PREFERENCE_DIR.clone()),
+            ("home", HOME_DIR.clone()),
+            ("config", CONFIG_DIR.clone()),
+            ("data", DATA_DIR.clone()),
+            ("cache", CACHE_DIR.clone()),
+            ("preference", PREFERENCE_DIR.clone()),
             // These are windows specific LocalAppData equivalents
-            ("xdg_config_local", CONFIG_LOCAL_DIR.clone()),
-            ("xdg_data_local", DATA_LOCAL_DIR.clone()),
+            ("config_local", CONFIG_LOCAL_DIR.clone()),
+            ("data_local", DATA_LOCAL_DIR.clone()),
+            // XDG based dirs
+            ("xdg_home", XDG_HOME.clone()),
+            ("xdg_config", XDG_CONFIG_HOME.clone()),
+            ("xdg_data", XDG_DATA_HOME.clone()),
+            ("xdg_cache", XDG_CACHE_HOME.clone()),
+            ("xdg_bin", XDG_BIN_HOME.clone()),
+            ("xdg_state", XDG_STATE_HOME.clone()),
         ];
         if let Some(state_dir) = STATE_DIR.clone() {
-            paths.push(("xdg_state", state_dir));
+            debug!("Using state dir: {}", state_dir);
+            paths.push(("state", state_dir));
         }
         if let Some(executable_dir) = EXECUTABLE_DIR.clone() {
-            paths.push(("xdg_executable", executable_dir));
+            debug!("Using executable dir: {}", executable_dir);
+            paths.push(("executable", executable_dir));
         }
         if let Some(runtime_dir) = RUNTIME_DIR.clone() {
-            paths.push(("xdg_runtime", runtime_dir));
+            debug!("Using runtime dir: {}", runtime_dir);
+            paths.push(("runtime", runtime_dir));
+        }
+        if let Some(xdg_runtime_dir) = XDG_RUNTIME_DIR.clone() {
+            debug!("Using xdg runtime dir: {}", xdg_runtime_dir);
+            paths.push(("xdg_runtime", xdg_runtime_dir));
         }
         let dir_map: BTreeMap<&'static str, String> = BTreeMap::from_iter(paths);
         let all_tags: BTreeMap<String, String> = global_config
@@ -498,23 +436,25 @@ impl HermitConfig {
         reg.render_template(&content, &object)
     }
 
-    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P, home_dir: &Path) -> PathBuf {
+    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
         let dir: PathBuf = dir.into();
         let dir_str = dir.to_string_lossy().to_string();
         let dir = self
             .render_handlebars(&dir_str, &BTreeMap::new())
             .unwrap_or(dir_str);
-
+        debug!("Expanding directory: {}", dir);
         if dir.starts_with("~/.config") {
-            dir.replace("~/.config", &CONFIG_DIR).into()
+            dir.replace("~/.config", &XDG_CONFIG_HOME).into()
         } else if dir.starts_with("~/.local/share") {
-            dir.replace("~/.local/share", &DATA_DIR).into()
-        } else if dir.starts_with("~/.local/state")
-            && let Some(state) = STATE_DIR.clone()
-        {
-            dir.replace("~/.local/state", &state).into()
+            dir.replace("~/.local/share", &XDG_DATA_HOME).into()
+        } else if dir.starts_with("~/.local/state") {
+            dir.replace("~/.local/state", &XDG_STATE_HOME).into()
+        } else if dir.starts_with("~/.cache") {
+            dir.replace("~/.cache", &XDG_CACHE_HOME).into()
+        } else if dir.starts_with("~/.local/bin") {
+            dir.replace("~/.local/bin", &XDG_BIN_HOME).into()
         } else {
-            shellexpand::tilde_with_context(&dir, || home_dir.to_str().map(|s| s.to_string()))
+            shellexpand::tilde_with_context(&dir, || Some(HOME_DIR.to_string()))
                 .into_owned()
                 .into()
         }
@@ -909,7 +849,6 @@ pub trait ConfigItem {
 #[derive(Debug, Default)]
 pub struct GlobalConfig {
     hermit_dir: PathBuf,
-    home_dir: PathBuf,
     subconfigs: BTreeMap<String, ArcHermitConfig>,
     all_profiles: BTreeMap<String, BTreeSet<Tag>>,
     all_required_tags: BTreeSet<RequireTag>,
@@ -919,16 +858,11 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn from_paths(
-        hermit_dir: &Path,
-        home_dir: &Path,
-        paths: &[PathBuf],
-    ) -> Result<Arc<Self>, ConfigError> {
+    pub fn from_paths(hermit_dir: &Path, paths: &[PathBuf]) -> Result<Arc<Self>, ConfigError> {
         let mut errors = Vec::new();
         Ok(Arc::new_cyclic(|global_config: &Weak<GlobalConfig>| {
             let mut result = GlobalConfig {
                 hermit_dir: hermit_dir.to_path_buf(),
-                home_dir: home_dir.to_path_buf(),
                 all_detected_tags: detect_builtin_tags(),
                 ..Default::default()
             };
@@ -1013,10 +947,6 @@ impl GlobalConfig {
 
     pub fn hermit_dir(&self) -> &Path {
         &self.hermit_dir
-    }
-
-    pub fn home_dir(&self) -> &Path {
-        &self.home_dir
     }
 
     pub fn all_required_tags(&self) -> &BTreeSet<RequireTag> {
