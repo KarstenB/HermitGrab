@@ -17,6 +17,7 @@ use crate::config::{
     load_hermit_config_editable,
 };
 use crate::file_ops::copy;
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::AddError;
 use crate::{
     HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag, choice, error, info, success,
@@ -83,7 +84,7 @@ pub fn add_patch(
         get_config_dir_interactive(source, global_config)?
     };
     let config_file = config_dir.join(CONF_FILE_NAME);
-    let target = normalize_target(source, target, global_config)?;
+    let target = normalize_target(source, target)?;
     let source_filename: PathBuf = source
         .file_name()
         .ok_or(AddError::FileName)?
@@ -137,7 +138,7 @@ pub fn add_link(
         get_config_dir_interactive(source, global_config)?
     };
     let config_file = config_dir.join(CONF_FILE_NAME);
-    let target = normalize_target(source, target, global_config)?;
+    let target = normalize_target(source, target)?;
     let source_filename: PathBuf = source
         .file_name()
         .ok_or(AddError::FileName)?
@@ -170,18 +171,14 @@ pub fn add_link(
     Ok(())
 }
 
-fn normalize_target(
-    source: &Path,
-    target: &Option<PathBuf>,
-    global_config: &Arc<GlobalConfig>,
-) -> Result<PathBuf, AddError> {
+fn normalize_target(source: &Path, target: &Option<PathBuf>) -> Result<PathBuf, AddError> {
     let target = if let Some(target) = target {
         let path = PathBuf::from(target);
-        path.strip_prefix(global_config.home_dir())
+        path.strip_prefix(BASE_DIRS.home_dir())
             .map(|x| x.to_path_buf())
             .unwrap_or(path)
     } else {
-        source.strip_prefix(global_config.home_dir())?.to_path_buf()
+        source.strip_prefix(BASE_DIRS.home_dir())?.to_path_buf()
     };
     let target = if target.is_absolute() {
         target
@@ -213,7 +210,7 @@ fn get_config_dir_interactive(
         "To avoid being prompted about the directory, you can use the --config-dir command line option",
     );
     let relative_source = absolute_source
-        .strip_prefix(global_config.home_dir())
+        .strip_prefix(BASE_DIRS.home_dir())
         .unwrap_or(&absolute_source);
     let last_segment_from_absolute = if absolute_source.is_dir() {
         absolute_source

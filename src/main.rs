@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use directories::UserDirs;
 
 use crate::commands::{Cli, Commands};
 use crate::common_cli::{hermitgrab_info, info};
@@ -14,6 +13,7 @@ use crate::config::{
     CONF_FILE_NAME, GlobalConfig, HermitConfig, InstallConfig, LinkConfig, LinkType, RequireTag,
     find_hermit_files,
 };
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::FileOpsError;
 
 mod action;
@@ -32,20 +32,19 @@ fn init_hermit_dir(cli_path: &Option<PathBuf>) -> std::path::PathBuf {
         hermitgrab_info!("Using hermit directory from CLI: {}", path.display());
         return path.clone();
     }
-    let user_dirs = UserDirs::new().expect("Could not get user directories");
-    let dotfiles_dir = user_dirs.home_dir().join(".hermitgrab");
+    let dotfiles_dir = BASE_DIRS.home_dir().join(".hermitgrab");
     if !dotfiles_dir.exists() {
         let path_buf = std::env::current_exe().ok();
         if let Some(exe) = path_buf {
             let exe_dir = exe.parent();
-            if let Some(exe_dir) = exe_dir {
-                if exe_dir.join(CONF_FILE_NAME).exists() {
-                    hermitgrab_info!(
-                        "Using hermit directory beside executable {}",
-                        dotfiles_dir.display()
-                    );
-                    return exe_dir.to_path_buf();
-                }
+            if let Some(exe_dir) = exe_dir
+                && exe_dir.join(CONF_FILE_NAME).exists()
+            {
+                hermitgrab_info!(
+                    "Using hermit directory beside executable {}",
+                    dotfiles_dir.display()
+                );
+                return exe_dir.to_path_buf();
             }
         }
     }
@@ -72,11 +71,7 @@ async fn main() -> Result<()> {
     }
     let search_root = init_hermit_dir(&cli.hermit_dir);
     let yaml_files = find_hermit_files(&search_root);
-    let home_dir = UserDirs::new()
-        .expect("Could not get user directories")
-        .home_dir()
-        .to_path_buf();
-    let global_config = GlobalConfig::from_paths(&search_root, &home_dir, &yaml_files)?;
+    let global_config = GlobalConfig::from_paths(&search_root, &yaml_files)?;
     #[cfg(not(feature = "interactive"))]
     let interactive = false;
     #[cfg(feature = "interactive")]

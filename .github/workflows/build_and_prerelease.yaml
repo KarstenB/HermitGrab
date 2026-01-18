@@ -24,6 +24,7 @@ jobs:
           import tomllib
           import subprocess
           import sys
+          import os
           
           # Read version from Cargo.toml
           with open('Cargo.toml', 'rb') as f:
@@ -46,8 +47,13 @@ jobs:
           short_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode().strip()
           
           tag = f"v{major}.{minor}.{patch}-pre-{short_sha}"
-          with open("$GITHUB_OUTPUT", "a") as f:
-              f.write(f"tag={tag}\n")
+          github_output = os.environ.get('GITHUB_OUTPUT')
+          if github_output:
+              with open(github_output, "a") as f:
+                  f.write(f"tag={tag}\n")
+          else:
+              print("GITHUB_OUTPUT not set", file=sys.stderr)
+              sys.exit(1)
           print(f"Generated tag: {tag}")
           EOF
 

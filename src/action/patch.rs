@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::action::{Action, ActionObserver, ActionOutput, Status};
 use crate::config::{ConfigItem, PatchConfig, PatchType};
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::{ActionError, PatchActionError};
 use crate::{HermitConfig, RequireTag};
 
@@ -29,7 +30,11 @@ pub struct PatchAction {
 
 impl PatchAction {
     pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Result<Self, std::io::Error> {
-        let src = if patch.source.is_absolute() {
+        let src = match cfg.expand_directory(&patch.source) {
+            Ok(path) => path,
+            Err(e) => return Err(std::io::Error::other(e)),
+        };
+        let src = if src.is_absolute() {
             patch.source.clone()
         } else {
             cfg.directory().join(&patch.source)
@@ -40,9 +45,12 @@ impl PatchAction {
             .unwrap_or(&patch.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.expand_directory(&patch.target);
+        let dst = match cfg.expand_directory(&patch.target) {
+            Ok(path) => path,
+            Err(e) => return Err(std::io::Error::other(e)),
+        };
         let rel_dst = dst
-            .strip_prefix(cfg.global_config().home_dir())
+            .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
@@ -164,7 +172,7 @@ fn to_content(
 ) -> Result<String, PatchActionError> {
     match extension.as_deref() {
         Some("yaml") | Some("yml") => {
-            let yaml = serde_yml::to_string(&dst_json)?;
+            let yaml = serde_yaml_ng::to_string(&dst_json)?;
             Ok(yaml)
         }
         Some("toml") => {
@@ -184,7 +192,7 @@ fn parse_file(
 ) -> Result<serde_json::Value, PatchActionError> {
     match extension.as_deref() {
         Some("yaml") | Some("yml") => {
-            let yaml: serde_yml::Value = serde_yml::from_str(&dst_content)?;
+            let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(&dst_content)?;
             Ok(serde_json::to_value(yaml)?)
         }
         Some("toml") => {

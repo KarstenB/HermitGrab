@@ -10,12 +10,13 @@ use crate::config::{DetectorConfig, GlobalConfig, Tag};
 pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     let mut tags = BTreeSet::new();
     // get user name
-    let user = whoami::username();
-    tags.insert(Tag::new_with_value(
-        "user",
-        &user,
-        crate::config::Source::BuiltInDetector,
-    ));
+    if let Ok(user) = whoami::username() {
+        tags.insert(Tag::new_with_value(
+            "user",
+            &user,
+            crate::config::Source::BuiltInDetector,
+        ));
+    }
     // Hostname
     if let Ok(hostname) = get_hostname() {
         tags.insert(Tag::new_with_value(

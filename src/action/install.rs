@@ -51,11 +51,11 @@ impl InstallAction {
             let status = execute_script(check_cmd);
             // We ignore errors here which may be caused by the command not being found
             // or other issues, as we only care about successful execution.
-            if let Ok(output) = status {
-                if output.status.success() {
-                    self.update_output(check_cmd, output, "check_cmd")?;
-                    return Ok(false);
-                }
+            if let Ok(output) = status
+                && output.status.success()
+            {
+                self.update_output(check_cmd, output, "check_cmd")?;
+                return Ok(false);
             }
         }
         Ok(true)
@@ -157,19 +157,14 @@ pub fn execute_script(cmd: &str) -> Result<Output, std::io::Error> {
             .arg(cmd)
             .output();
     };
-    tempfile::NamedTempFile::new()
-        .and_then(|mut file| {
-            writeln!(file, "{cmd}")?;
-            file.flush()?;
-            let cmd_path = file.into_temp_path();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&cmd_path, std::fs::Permissions::from_mode(0o755))?;
-            }
-            Ok(cmd_path)
-        })
-        .and_then(|cmd| std::process::Command::new(&cmd).env("PATH", path).output())
+    let mut file = tempfile::NamedTempFile::new()?;
+    writeln!(file, "{cmd}")?;
+    file.flush()?;
+    let cmd_name = file.path();
+    std::process::Command::new("sh")
+        .arg(cmd_name)
+        .env("PATH", path)
+        .output()
 }
 
 #[cfg(not(feature = "ubi"))]
@@ -190,11 +185,13 @@ fn insert_ubi_into_path() -> Result<String, std::io::Error> {
     path.push_str(temp_dir.path().to_str().unwrap());
     let ubi_exe = temp_dir.path().join("ubi");
     if !ubi_exe.exists() {
+        use crate::file_ops::dirs::HERMIT_EXE;
+
         let script = format!(
             r#"#!/bin/sh
 {} ubi -- "$@"
-        "#,
-            std::env::current_exe()?.display()
+"#,
+            HERMIT_EXE.display()
         );
         std::fs::write(&ubi_exe, script)?;
         #[cfg(unix)]

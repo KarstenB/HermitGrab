@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::io::Write;
+use std::sync::LazyLock;
 
 use crossterm::style::Stylize;
 
@@ -11,7 +12,7 @@ pub fn hermitgrab_info(msg: &str) {
 }
 
 pub fn order(msg: &str) {
-    println!("{} {}", "      [order]".bold().cyan(), msg.cyan());
+    println!("{} {}", "     [order]".bold().cyan(), msg.cyan());
 }
 
 pub fn step(msg: &str) {
@@ -22,6 +23,18 @@ pub fn choice(msg: &str) {
     println!("{} {}", "    [choice]".bold().blue(), msg.blue());
 }
 
+static DEBUG_ENABLED: LazyLock<bool> = LazyLock::new(|| {
+    std::env::var("HERMITGRAB_DEBUG")
+        .map(|v| v == "1" || v.to_lowercase() == "true")
+        .unwrap_or(false)
+});
+
+#[allow(dead_code)]
+pub fn debug(msg: &str) {
+    if *DEBUG_ENABLED {
+        println!("{} {}", "     [debug]".bold().dark_grey(), msg.dark_grey());
+    }
+}
 pub fn info(msg: &str) {
     println!("{} {}", "      [info]".bold().cyan(), msg.cyan());
 }
@@ -109,6 +122,13 @@ macro_rules! choice {
         $crate::common_cli::choice(&format!($($arg)*))
     };
 }
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        $crate::common_cli::debug(&format!($($arg)*))
+    };
+}
+
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {

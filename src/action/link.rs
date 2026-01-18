@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::action::{Action, ActionObserver, Status};
 use crate::config::{ConfigItem, FallbackOperation, FileStatus};
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::file_ops::{check_copied, link_files};
 use crate::hermitgrab_error::{ActionError, LinkActionError};
 use crate::{HermitConfig, LinkConfig, LinkType, RequireTag};
@@ -34,20 +35,33 @@ impl LinkAction {
         cfg: &HermitConfig,
         fallback: &Option<FallbackOperation>,
     ) -> Result<Self, std::io::Error> {
-        let src = if link_config.source.is_absolute() {
+        let src = match cfg.expand_directory(&link_config.source) {
+            Ok(path) => path,
+            Err(e) => return Err(std::io::Error::other(e)),
+        };
+        let src = if src.is_absolute() {
             link_config.source.clone()
         } else {
             cfg.directory().join(&link_config.source)
         };
+        if !src.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Source file does not exist: {}", src.display()),
+            ));
+        }
         let src = src.canonicalize()?;
         let rel_src = src
             .strip_prefix(cfg.directory())
             .unwrap_or(&link_config.source)
             .to_string_lossy()
             .to_string();
-        let dst = cfg.expand_directory(&link_config.target);
+        let dst = match cfg.expand_directory(&link_config.target) {
+            Ok(path) => path,
+            Err(e) => return Err(std::io::Error::other(e)),
+        };
         let rel_dst = dst
-            .strip_prefix(cfg.global_config().home_dir())
+            .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)
             .to_string_lossy()
             .to_string();
@@ -269,10 +283,11 @@ mod tests {
             fs::remove_dir_all(&src).unwrap();
         }
         fs::create_dir(&src).unwrap();
+        fs::write(src.join("file1.txt"), b"file 1").unwrap();
         link_files(&src, &dst, &LinkType::Soft, &FallbackOperation::Abort).unwrap();
         assert!(dst.exists());
         assert!(dst.is_symlink());
-        assert!(dst.read_link().unwrap() == src);
+        assert_eq!(dst.read_link().unwrap(), src.canonicalize().unwrap());
         fs::remove_dir_all(&src).unwrap();
         fs::remove_dir_all(&dst).unwrap();
     }

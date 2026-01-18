@@ -1,0 +1,84 @@
+requires=["+xdg_test"]
+
+# XDG_CACHE_HOME
+[[link]]
+source = "config.fish"
+target = "~/.cache/fish/config.fish_in_path_XDG_CACHE"
+[[link]]
+source = "config.fish"
+target = "{{ dir.xdg_cache }}/fish/config.fish_XDG_CACHE"
+
+[[link]]
+source = "completions/rustup.fish"
+target = "~/.cache/fish/completions/rustup.fish_in_path_XDG_CACHE"
+[[link]]
+source = "completions/rustup.fish"
+target = "{{ dir.xdg_cache }}/fish/completions/rustup.fish_XDG_CACHE"
+
+# XDG_CONFIG_HOME
+[[link]]
+source = "config.fish"
+target = "~/.config/fish/config.fish_in_path_XDG_CONFIG"
+[[link]]
+source = "config.fish"
+target = "{{ dir.xdg_config }}/fish/config.fish_XDG_CONFIG"
+
+[[link]]
+source = "completions/rustup.fish"
+target = "~/.config/fish/completions/rustup.fish_in_path_XDG_CONFIG"
+[[link]]
+source = "completions/rustup.fish"
+target = "{{ dir.xdg_config }}/fish/completions/rustup.fish_XDG_CONFIG"
+
+# XDG_DATA_HOME
+[[link]]
+source = "config.fish"
+target = "~/.local/share/fish/config.fish_in_path_XDG_DATA"
+[[link]]
+source = "config.fish"
+target = "{{ dir.xdg_data }}/fish/config.fish_XDG_DATA"
+
+[[link]]
+source = "completions/rustup.fish"
+target = "~/.local/share/fish/completions/rustup.fish_in_path_XDG_DATA"
+[[link]]
+source = "completions/rustup.fish"
+target = "{{ dir.xdg_data }}/fish/completions/rustup.fish_XDG_DATA"
+
+# XDG_BIN_HOME
+[[link]]
+source = "config.fish"
+target = "~/.local/bin/fish/config.fish_in_path_XDG_BIN"
+[[link]]
+source = "config.fish"
+target = "{{ dir.xdg_bin }}/fish/config.fish_XDG_BIN"   
+
+[[link]]
+source = "completions/rustup.fish"
+target = "~/.local/bin/fish/completions/rustup.fish_in_path_XDG_BIN"
+[[link]]
+source = "completions/rustup.fish"
+target = "{{ dir.xdg_bin }}/fish/completions/rustup.fish_XDG_BIN"
+
+# XDG_RUNTIME_DIR
+[[link]]
+source = "config.fish"
+target = "{{ dir.xdg_runtime }}/fish/config.fish_XDG_RUNTIME"
+[[link]]
+source = "completions/rustup.fish"
+target = "{{ dir.xdg_runtime }}/fish/completions/rustup.fish_XDG_RUNTIME"
+
+# XDG_STATE_HOME
+[[link]]
+source = "config.fish"
+target = "~/.local/state/fish/config.fish_in_path_XDG_STATE"
+[[link]]
+source = "config.fish"
+target = "{{ dir.xdg_state }}/fish/config.fish_XDG_STATE"
+
+[[link]]
+source = "completions/rustup.fish"
+target = "~/.local/state/fish/completions/rustup.fish_in_path_XDG_STATE"
+[[link]]
+source = "completions/rustup.fish"
+target = "{{ dir.xdg_state }}/fish/completions/rustup.fish_XDG_STATE"

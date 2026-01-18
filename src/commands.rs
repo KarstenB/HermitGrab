@@ -413,7 +413,7 @@ pub async fn execute(
                     config_map.insert(config_name, config.clone());
                 }
 
-                let formatted = serde_yml::to_string(&config_map)?;
+                let formatted = serde_yaml_ng::to_string(&config_map)?;
                 info!("Printing the complete configuration:");
                 println!("{formatted}");
                 if let Some(json_path) = &json {

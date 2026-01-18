@@ -22,7 +22,9 @@ use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
 use crate::action::{Actions, ArcAction};
+use crate::debug;
 use crate::detector::{detect_builtin_tags, get_detected_tags};
+use crate::file_ops::dirs::*;
 use crate::hermitgrab_error::{ApplyError, ConfigError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
@@ -298,15 +300,14 @@ impl HermitConfig {
         &self,
         lc_src: &str,
         variables: &BTreeMap<String, String>,
-    ) -> Option<String> {
+    ) -> Result<String, RenderError> {
         self.snippets
             .get(lc_src)
             .cloned()
             .or_else(|| self.global_config().get_snippet(lc_src).cloned())
-            .and_then(|src| {
-                self.render_handlebars(&src, variables)
-                    .inspect_err(|e| crate::error!("Error while rendering template: {e}"))
-                    .ok()
+            .map(|src| self.render_handlebars(&src, variables))
+            .unwrap_or_else(|| {
+                Err(RenderErrorReason::Other(format!("Snippet not found: {lc_src}")).into())
             })
     }
 
@@ -314,14 +315,63 @@ impl HermitConfig {
         &self,
         content: &str,
         variables: &BTreeMap<String, String>,
-    ) -> Result<String, handlebars::RenderError> {
-        let content = content.replace(
-            "~",
-            self.global_config().home_dir().to_str().unwrap_or(content),
-        );
+    ) -> Result<String, RenderError> {
         let global_config = self.global_config();
-        let home_dir = global_config.home_dir();
-        let dir_map: BTreeMap<&'static str, String> = BTreeMap::from_iter([
+        let dir_map = self.collect_dir_map(&global_config);
+        let all_tags: BTreeMap<String, String> = global_config
+            .all_detected_tags()
+            .iter()
+            .filter_map(|x| x.1.as_deref().map(|y| (x.0.to_string(), y.to_string())))
+            .collect();
+        let mut rendered_variables = BTreeMap::new();
+        let empty_map = BTreeMap::new();
+        let cfg = self;
+        for (key, value) in variables.iter() {
+            rendered_variables.insert(key, cfg.render_handlebars(value, &empty_map)?);
+        }
+        let env_vars: BTreeMap<String, String> = std::env::vars().collect();
+        let sys_info: BTreeMap<String, String> = BTreeMap::from([
+            (
+                "cpu_num".to_string(),
+                sys_info::cpu_num()
+                    .map(|n| n.to_string())
+                    .unwrap_or_default(),
+            ),
+            (
+                "mem_total".to_string(),
+                sys_info::mem_info()
+                    .map(|m| m.total.to_string())
+                    .unwrap_or_default(),
+            ),
+        ]);
+        let mut hermit: BTreeMap<String, String> = BTreeMap::from([
+            ("version".to_string(), env!("CARGO_PKG_VERSION").to_string()),
+            (
+                "exe".to_string(),
+                HERMIT_EXE.to_str().unwrap_or_default().to_string(),
+            ),
+            (
+                "ubi".to_string(),
+                format!("{} ubi -- ", HERMIT_EXE.display()),
+            ),
+        ]);
+        if let Some(sha) = option_env!("CARGO_MAKE_GIT_HEAD_LAST_COMMIT_HASH_PREFIX") {
+            hermit.insert("git_sha".to_string(), sha.to_string());
+        }
+        let object = serde_json::json!({
+            "dir": dir_map,
+            "var": rendered_variables,
+            "tag": all_tags,
+            "env": env_vars,
+            "sys": sys_info,
+            "hermit": hermit,
+        });
+        let reg = create_handlebars(variables, cfg);
+        reg.render_template(content, &object)
+    }
+
+    fn collect_dir_map(&self, global_config: &Arc<GlobalConfig>) -> BTreeMap<&'static str, String> {
+        let mut paths = vec![
             (
                 "this",
                 self.directory()
@@ -339,121 +389,96 @@ impl HermitConfig {
                     .expect("PathBuf is correct")
                     .to_string(),
             ),
-            (
-                "home",
-                home_dir
-                    .to_path_buf()
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-            (
-                "xdg_config",
-                std::env::var("XDG_CONFIG_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".config"))
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-            (
-                "xdg_data",
-                std::env::var("XDG_DATA_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".local").join("share"))
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-            (
-                "xdg_state",
-                std::env::var("XDG_STATE_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or(home_dir.join(".local").join("state"))
-                    .to_str()
-                    .expect("PathBuf is correct")
-                    .to_string(),
-            ),
-        ]);
-        let all_tags: BTreeMap<String, String> = global_config
-            .all_detected_tags()
-            .iter()
-            .filter_map(|x| x.1.as_deref().map(|y| (x.0.to_string(), y.to_string())))
-            .collect();
-        let mut rendered_variables = BTreeMap::new();
-        let empty_map = BTreeMap::new();
-        let cfg = self;
-        for (key, value) in variables.iter() {
-            rendered_variables.insert(
-                key,
-                cfg.render_handlebars(value, &empty_map)
-                    .unwrap_or(value.to_string()),
-            );
+            ("home", HOME_DIR.clone()),
+            ("config", CONFIG_DIR.clone()),
+            ("data", DATA_DIR.clone()),
+            ("cache", CACHE_DIR.clone()),
+            ("preference", PREFERENCE_DIR.clone()),
+            // These are windows specific LocalAppData equivalents
+            ("config_local", CONFIG_LOCAL_DIR.clone()),
+            ("data_local", DATA_LOCAL_DIR.clone()),
+            // XDG based dirs
+            ("xdg_home", XDG_HOME.clone()),
+            ("xdg_config", XDG_CONFIG_HOME.clone()),
+            ("xdg_data", XDG_DATA_HOME.clone()),
+            ("xdg_cache", XDG_CACHE_HOME.clone()),
+            ("xdg_bin", XDG_BIN_HOME.clone()),
+            ("xdg_state", XDG_STATE_HOME.clone()),
+        ];
+        if let Some(state_dir) = STATE_DIR.clone() {
+            debug!("Using state dir: {}", state_dir);
+            paths.push(("state", state_dir));
         }
-        let object = serde_json::json!({
-            "dir": dir_map,
-            "var": rendered_variables,
-            "tag": all_tags,
-        });
-        let mut reg = Handlebars::new();
-        reg.register_helper(
-            "snippet",
-            Box::new(
-                |h: &Helper,
-                 _: &Handlebars,
-                 _: &Context,
-                 _: &mut RenderContext,
-                 out: &mut dyn Output|
-                 -> Result<(), RenderError> {
-                    let snippet = h
-                        .param(0)
-                        .and_then(|x| x.relative_path())
-                        .ok_or(RenderErrorReason::ParamNotFoundForIndex("format", 0))?;
-                    let resolved = cfg.get_snippet(snippet, variables);
-                    if let Some(snippet) = resolved {
-                        out.write(&snippet)?;
-                    } else {
-                        return Err(RenderErrorReason::Other(
-                            "Failed to resolve snippet".to_string(),
-                        )
-                        .into());
-                    }
-                    Ok(())
-                },
-            ),
-        );
-        reg.render_template(&content, &object)
+        if let Some(executable_dir) = EXECUTABLE_DIR.clone() {
+            debug!("Using executable dir: {}", executable_dir);
+            paths.push(("executable", executable_dir));
+        }
+        if let Some(runtime_dir) = RUNTIME_DIR.clone() {
+            debug!("Using runtime dir: {}", runtime_dir);
+            paths.push(("runtime", runtime_dir));
+        }
+        if let Some(xdg_runtime_dir) = XDG_RUNTIME_DIR.clone() {
+            debug!("Using xdg runtime dir: {}", xdg_runtime_dir);
+            paths.push(("xdg_runtime", xdg_runtime_dir));
+        }
+        let dir_map: BTreeMap<&'static str, String> = BTreeMap::from_iter(paths);
+        dir_map
     }
 
-    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> PathBuf {
+    pub fn expand_directory<P: Into<PathBuf>>(&self, dir: P) -> Result<PathBuf, RenderError> {
         let dir: PathBuf = dir.into();
         let dir_str = dir.to_string_lossy().to_string();
-        let dir = self
-            .render_handlebars(&dir_str, &BTreeMap::new())
-            .unwrap_or(dir_str);
-
-        if dir.starts_with("~/.config") && std::env::var("XDG_CONFIG_HOME").is_ok() {
-            dir.replace(
-                "~/.config",
-                &std::env::var("XDG_CONFIG_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else if dir.starts_with("~/.local/share") && std::env::var("XDG_DATA_HOME").is_ok() {
-            dir.replace(
-                "~/.local/share",
-                &std::env::var("XDG_DATA_HOME").unwrap_or_default(),
-            )
-            .into()
-        } else if dir.starts_with("~/.local/state") && std::env::var("XDG_STATE_HOME").is_ok() {
-            dir.replace(
-                "~/.local/state",
-                &std::env::var("XDG_STATE_HOME").unwrap_or_default(),
-            )
-            .into()
+        let dir = self.render_handlebars(&dir_str, &BTreeMap::new())?;
+        debug!("Expanding directory: {}", dir);
+        if dir.starts_with("~/.config") {
+            Ok(dir.replace("~/.config", &XDG_CONFIG_HOME).into())
+        } else if dir.starts_with("~/.local/share") {
+            Ok(dir.replace("~/.local/share", &XDG_DATA_HOME).into())
+        } else if dir.starts_with("~/.local/state") {
+            Ok(dir.replace("~/.local/state", &XDG_STATE_HOME).into())
+        } else if dir.starts_with("~/.cache") {
+            Ok(dir.replace("~/.cache", &XDG_CACHE_HOME).into())
+        } else if dir.starts_with("~/.local/bin") {
+            Ok(dir.replace("~/.local/bin", &XDG_BIN_HOME).into())
         } else {
-            shellexpand::tilde(&dir).into_owned().into()
+            Ok(
+                shellexpand::tilde_with_context(&dir, || Some(HOME_DIR.to_string()))
+                    .into_owned()
+                    .into(),
+            )
         }
     }
+}
+
+fn create_handlebars<'cfg, 'v>(
+    variables: &'v BTreeMap<String, String>,
+    cfg: &'cfg HermitConfig,
+) -> Handlebars<'cfg>
+where
+    'v: 'cfg,
+{
+    let mut reg = Handlebars::new();
+    //reg.set_strict_mode(true);
+    reg.register_helper(
+        "snippet",
+        Box::new(
+            |h: &Helper,
+             _: &Handlebars,
+             _: &Context,
+             _: &mut RenderContext,
+             out: &mut dyn Output|
+             -> Result<(), RenderError> {
+                let snippet = h
+                    .param(0)
+                    .and_then(|x| x.relative_path())
+                    .ok_or(RenderErrorReason::ParamNotFoundForIndex("format", 0))?;
+                let resolved = cfg.get_snippet(snippet, variables)?;
+                out.write(&resolved)?;
+                Ok(())
+            },
+        ),
+    );
+    reg
 }
 
 impl ConfigItem for HermitConfig {
@@ -844,7 +869,6 @@ pub trait ConfigItem {
 #[derive(Debug, Default)]
 pub struct GlobalConfig {
     hermit_dir: PathBuf,
-    home_dir: PathBuf,
     subconfigs: BTreeMap<String, ArcHermitConfig>,
     all_profiles: BTreeMap<String, BTreeSet<Tag>>,
     all_required_tags: BTreeSet<RequireTag>,
@@ -854,16 +878,11 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn from_paths(
-        hermit_dir: &Path,
-        home_dir: &Path,
-        paths: &[PathBuf],
-    ) -> Result<Arc<Self>, ConfigError> {
+    pub fn from_paths(hermit_dir: &Path, paths: &[PathBuf]) -> Result<Arc<Self>, ConfigError> {
         let mut errors = Vec::new();
         Ok(Arc::new_cyclic(|global_config: &Weak<GlobalConfig>| {
             let mut result = GlobalConfig {
                 hermit_dir: hermit_dir.to_path_buf(),
-                home_dir: home_dir.to_path_buf(),
                 all_detected_tags: detect_builtin_tags(),
                 ..Default::default()
             };
@@ -948,10 +967,6 @@ impl GlobalConfig {
 
     pub fn hermit_dir(&self) -> &Path {
         &self.hermit_dir
-    }
-
-    pub fn home_dir(&self) -> &Path {
-        &self.home_dir
     }
 
     pub fn all_required_tags(&self) -> &BTreeSet<RequireTag> {
@@ -1082,15 +1097,15 @@ pub fn find_hermit_files(root: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     if root.is_file() && root.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
         result.push(root.to_path_buf());
-    } else if root.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    result.extend(find_hermit_files(&path));
-                } else if path.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
-                    result.push(path);
-                }
+    } else if root.is_dir()
+        && let Ok(entries) = std::fs::read_dir(root)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                result.extend(find_hermit_files(&path));
+            } else if path.file_name().is_some_and(|f| f == CONF_FILE_NAME) {
+                result.push(path);
             }
         }
     }
