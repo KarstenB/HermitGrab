@@ -227,7 +227,16 @@ where
 }
 
 pub mod dirs {
+    use std::path::PathBuf;
+
     use super::LazyLock;
+
+    pub static HERMIT_EXE: LazyLock<PathBuf> = LazyLock::new(|| {
+        std::env::current_exe()
+            .expect("Should get current exe path")
+            .canonicalize()
+            .expect("Should canonicalize exe path")
+    });
 
     pub static BASE_DIRS: LazyLock<directories::BaseDirs, fn() -> directories::BaseDirs> =
         LazyLock::new(|| directories::BaseDirs::new().expect("BaseDirs should init"));

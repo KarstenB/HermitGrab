@@ -344,12 +344,27 @@ impl HermitConfig {
                     .unwrap_or_default(),
             ),
         ]);
+        let mut hermit: BTreeMap<String, String> = BTreeMap::from([
+            ("version".to_string(), env!("CARGO_PKG_VERSION").to_string()),
+            (
+                "exe".to_string(),
+                HERMIT_EXE.to_str().unwrap_or_default().to_string(),
+            ),
+            (
+                "ubi".to_string(),
+                format!("{} ubi -- ", HERMIT_EXE.display()),
+            ),
+        ]);
+        if let Some(sha) = option_env!("CARGO_MAKE_GIT_HEAD_LAST_COMMIT_HASH_PREFIX") {
+            hermit.insert("git_sha".to_string(), sha.to_string());
+        }
         let object = serde_json::json!({
             "dir": dir_map,
             "var": rendered_variables,
             "tag": all_tags,
             "env": env_vars,
             "sys": sys_info,
+            "hermit": hermit,
         });
         let reg = create_handlebars(variables, cfg);
         reg.render_template(content, &object)
