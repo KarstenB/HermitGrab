@@ -20,13 +20,13 @@ use toml_edit::DocumentMut;
 
 use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
-use crate::action::patch::PatchAction;
+use crate::action::patch::{PatchAction, SourceSpec};
 use crate::action::{Actions, ArcAction};
 use crate::config::handlebar_math::math_helper;
 use crate::debug;
 use crate::detector::{detect_builtin_tags, get_detected_tags};
 use crate::file_ops::dirs::*;
-use crate::hermitgrab_error::{ApplyError, ConfigError};
+use crate::hermitgrab_error::{ApplyError, ConfigError, PatchActionError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
@@ -230,6 +230,8 @@ pub struct HermitConfig {
     #[serde(skip)]
     path: PathBuf,
     #[serde(skip)]
+    canonicalize_dir: PathBuf,
+    #[serde(skip)]
     global_cfg: Weak<GlobalConfig>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -262,14 +264,37 @@ pub type ArcHermitConfig = Arc<HermitConfig>;
 impl HermitConfig {
     pub fn create_new(path: &Path, global_cfg: Weak<GlobalConfig>) -> Self {
         HermitConfig {
-            path: path.to_path_buf(),
             global_cfg,
             ..Default::default()
         }
+        .update_path(path)
     }
 
-    pub fn path(&self) -> &Path {
-        self.path.as_path()
+    pub fn update_path<P: AsRef<Path>>(self, path: P) -> Self {
+        let full_path = path
+            .as_ref()
+            .canonicalize()
+            .unwrap_or_else(|_| path.as_ref().to_path_buf());
+        let full_dir = full_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .canonicalize()
+            .unwrap_or_else(|_| {
+                full_path
+                    .parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf()
+            });
+        HermitConfig {
+            path: full_path,
+            canonicalize_dir: full_dir,
+            ..self
+        }
+    }
+
+    /// Path to hermit.toml file
+    pub fn hermit_file(&self) -> &Path {
+        &self.path
     }
 
     pub fn global_config(&self) -> Arc<GlobalConfig> {
@@ -286,8 +311,9 @@ impl HermitConfig {
         Ok(())
     }
 
+    /// Directory containing the hermit.toml file
     pub fn directory(&self) -> &Path {
-        self.path.parent().expect("Expected to get parent")
+        &self.canonicalize_dir
     }
 
     pub fn config_items(&self) -> impl Iterator<Item = &dyn ConfigItem> {
@@ -376,7 +402,7 @@ impl HermitConfig {
     fn collect_dir_map(&self, global_config: &Arc<GlobalConfig>) -> BTreeMap<&'static str, String> {
         let mut paths = vec![
             (
-                "this",
+                "here",
                 self.directory()
                     .to_path_buf()
                     .to_str()
@@ -583,8 +609,40 @@ impl Display for PatchType {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum FullSpecOrPath {
+    Path(PathBuf),
+    FullSpec(SourceSpec),
+}
+
+impl FullSpecOrPath {
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            FullSpecOrPath::Path(p) => p,
+            FullSpecOrPath::FullSpec(s) => s.file(),
+        }
+    }
+
+    pub fn normalize(&self, cfg: &HermitConfig) -> Result<SourceSpec, PatchActionError> {
+        match self {
+            FullSpecOrPath::Path(p) => SourceSpec::raw_path(p.clone()).normalize(cfg),
+            FullSpecOrPath::FullSpec(s) => s.normalize(cfg),
+        }
+    }
+}
+
+impl From<FullSpecOrPath> for SourceSpec {
+    fn from(value: FullSpecOrPath) -> Self {
+        match value {
+            FullSpecOrPath::Path(p) => SourceSpec::raw_path(p),
+            FullSpecOrPath::FullSpec(s) => s,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PatchConfig {
-    pub source: PathBuf,
+    pub source: FullSpecOrPath,
     pub target: PathBuf,
     #[serde(rename = "type", default)]
     pub patch_type: PatchType,
@@ -606,9 +664,7 @@ impl ConfigItem for PatchConfig {
         cfg: &HermitConfig,
         _options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
-        Ok(Arc::new(Actions::Patch(
-            PatchAction::new(self, cfg).map_err(|e| ConfigError::Io(e, self.source.clone()))?,
-        )))
+        Ok(Arc::new(Actions::Patch(PatchAction::new(self, cfg)?)))
     }
 
     fn id(&self) -> String {
@@ -1082,9 +1138,9 @@ pub fn load_hermit_config<P: AsRef<Path>>(
 ) -> Result<Arc<HermitConfig>, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
         .map_err(|e| ConfigError::Io(e, path.as_ref().to_path_buf()))?;
-    let mut config: HermitConfig = toml::from_str(&content)
+    let config: HermitConfig = toml::from_str(&content)
         .map_err(|e| ConfigError::DeserializeToml(e, path.as_ref().to_path_buf()))?;
-    config.path = path.as_ref().to_path_buf();
+    let mut config = config.update_path(path);
     config.global_cfg = global_config;
     Ok(Arc::new(config))
 }

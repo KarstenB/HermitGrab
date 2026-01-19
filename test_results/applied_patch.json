@@ -8,7 +8,9 @@
         "requires": [
           "+cargo"
         ],
-        "src": "TEMP_DIR/.hermitgrab/cargo/patch.toml"
+        "src": {
+          "file": "TEMP_DIR/.hermitgrab/cargo/patch.toml"
+        }
       }
     }
   },

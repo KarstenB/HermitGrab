@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use itertools::Itertools;
 use jsonc_parser::ParseOptions;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::action::{Action, ActionObserver, ActionOutput, Status};
 use crate::config::{ConfigItem, PatchConfig, PatchType};
@@ -15,13 +16,143 @@ use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::{ActionError, PatchActionError};
 use crate::{HermitConfig, RequireTag};
 
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Default, Clone, Copy)]
+pub enum ContentType {
+    #[default]
+    Auto,
+    Json,
+    Yaml,
+    Toml,
+}
+
+impl ContentType {
+    pub fn is_default(&self) -> bool {
+        *self == ContentType::default()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Default, Clone, Copy)]
+pub enum PreprocessingType {
+    #[default]
+    None,
+    Handlebars,
+}
+
+impl PreprocessingType {
+    pub fn is_default(&self) -> bool {
+        *self == PreprocessingType::default()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum FileOrText {
+    File { file: PathBuf },
+    Text { text: String },
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
+pub struct SourceSpec {
+    #[serde(flatten)]
+    pub source: FileOrText,
+    #[serde(default, skip_serializing_if = "PreprocessingType::is_default")]
+    pub pre_processing: PreprocessingType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rendered_file: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "ContentType::is_default")]
+    pub content_type: ContentType,
+    // internal fields for providing references
+    #[serde(skip)]
+    rel_path: String,
+    #[serde(skip)]
+    normalized: bool,
+}
+
+impl SourceSpec {
+    pub fn raw_path(path: PathBuf) -> Self {
+        let rel_path = path.display().to_string();
+        Self {
+            source: FileOrText::File { file: path },
+            rel_path,
+            pre_processing: PreprocessingType::default(),
+            rendered_file: None,
+            content_type: ContentType::default(),
+            normalized: false,
+        }
+    }
+
+    pub fn normalize(&self, cfg: &HermitConfig) -> Result<Self, PatchActionError> {
+        if self.normalized {
+            return Ok(self.clone());
+        }
+        let src = match &self.source {
+            FileOrText::File { file } => {
+                let src = match cfg.expand_directory(&file) {
+                    Ok(path) => path,
+                    Err(e) => return Err(PatchActionError::Io(std::io::Error::other(e))),
+                };
+                let src = if src.is_absolute() {
+                    src.clone()
+                } else {
+                    cfg.directory().join(&src)
+                };
+                src.canonicalize()?
+            }
+            FileOrText::Text { text } => {
+                let temp_dir = BASE_DIRS
+                    .data_dir()
+                    .join("hermitgrab")
+                    .join("patch_sources");
+                std::fs::create_dir_all(&temp_dir)?;
+                let contents = match &self.pre_processing {
+                    PreprocessingType::Handlebars => {
+                        cfg.render_handlebars(text, &BTreeMap::new())?
+                    }
+                    PreprocessingType::None => text.clone(),
+                };
+                let temp_file_path = temp_dir.join(format!(
+                    "source_{}.txt",
+                    self.rendered_file.as_ref().map_or_else(
+                        || blake3::hash(contents.as_bytes()).to_string(),
+                        |f| f.display().to_string()
+                    )
+                ));
+
+                std::fs::write(&temp_file_path, contents)?;
+                temp_file_path.canonicalize()?
+            }
+        };
+
+        let rel_path = src
+            .strip_prefix(cfg.directory())
+            .unwrap_or(&src)
+            .to_string_lossy()
+            .to_string();
+        Ok(Self {
+            source: FileOrText::File { file: src },
+            rel_path,
+            pre_processing: PreprocessingType::default(),
+            rendered_file: None,
+            content_type: ContentType::default(),
+            normalized: true,
+        })
+    }
+
+    pub fn file(&self) -> &PathBuf {
+        match &self.source {
+            FileOrText::File { file } => file,
+            FileOrText::Text { text: _ } => {
+                panic!("SourceSpec with text source does not have a file path")
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct PatchAction {
     #[serde(skip)]
-    rel_src: String,
-    #[serde(skip)]
     rel_dst: String,
-    src: PathBuf,
+    src: SourceSpec,
     dst: PathBuf,
     patch_type: PatchType,
     order: u64,
@@ -29,25 +160,10 @@ pub struct PatchAction {
 }
 
 impl PatchAction {
-    pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Result<Self, std::io::Error> {
-        let src = match cfg.expand_directory(&patch.source) {
-            Ok(path) => path,
-            Err(e) => return Err(std::io::Error::other(e)),
-        };
-        let src = if src.is_absolute() {
-            patch.source.clone()
-        } else {
-            cfg.directory().join(&patch.source)
-        };
-        let src = src.canonicalize()?;
-        let rel_src = src
-            .strip_prefix(cfg.directory())
-            .unwrap_or(&patch.source)
-            .to_string_lossy()
-            .to_string();
+    pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Result<Self, PatchActionError> {
         let dst = match cfg.expand_directory(&patch.target) {
             Ok(path) => path,
-            Err(e) => return Err(std::io::Error::other(e)),
+            Err(e) => return Err(PatchActionError::Io(std::io::Error::other(e))),
         };
         let rel_dst = dst
             .strip_prefix(BASE_DIRS.home_dir())
@@ -56,8 +172,7 @@ impl PatchAction {
             .to_string();
         let requires = patch.get_all_requires(cfg);
         Ok(Self {
-            src,
-            rel_src,
+            src: patch.source.normalize(cfg)?,
             dst,
             rel_dst,
             order: patch.total_order(cfg),
@@ -69,16 +184,39 @@ impl PatchAction {
 
 impl Action for PatchAction {
     fn short_description(&self) -> String {
-        format!("{} {} with {}", self.patch_type, self.rel_dst, self.rel_src)
+        format!(
+            "{} {} with {}",
+            self.patch_type, self.rel_dst, self.src.rel_path
+        )
     }
 
     fn long_description(&self) -> String {
-        format!(
-            "{} {} with {}",
-            self.patch_type,
-            self.dst.display(),
-            self.src.display()
-        )
+        match &self.src.source {
+            FileOrText::File { file } => format!(
+                "{} {} with file {}",
+                self.patch_type,
+                self.dst.display(),
+                file.display()
+            ),
+            FileOrText::Text { text } => {
+                if text.len() > 30 {
+                    let snippet = &text[..30];
+                    return format!(
+                        "{} {} with '{}…'",
+                        self.patch_type,
+                        self.dst.display(),
+                        snippet.replace('\n', "\\n")
+                    );
+                } else {
+                    format!(
+                        "{} {} with '{}'",
+                        self.patch_type,
+                        self.dst.display(),
+                        text.replace("\n", "\\n")
+                    )
+                }
+            }
+        }
     }
 
     fn requires(&self) -> &[RequireTag] {
@@ -89,12 +227,12 @@ impl Action for PatchAction {
         observer.action_progress(&self.id(), 0, 1, "Applying patch");
         match self.patch_type {
             PatchType::JsonMerge => {
-                merge_json(&self.src, &self.dst)?;
+                merge_json(&self.src.file(), &self.dst)?;
                 observer.action_progress(&self.id(), 1, 1, "Merge completed");
                 Ok(())
             }
             PatchType::JsonPatch => {
-                patch_json(&self.src, &self.dst)?;
+                patch_json(&self.src.file(), &self.dst)?;
                 observer.action_progress(&self.id(), 1, 1, "Patch completed");
                 Ok(())
             }
@@ -104,7 +242,7 @@ impl Action for PatchAction {
     fn id(&self) -> String {
         format!(
             "PatchAction:{}:{}:{}",
-            self.rel_src,
+            self.src.rel_path,
             self.rel_dst,
             self.requires.iter().join(",")
         )

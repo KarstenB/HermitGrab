@@ -50,6 +50,8 @@ pub enum ConfigError {
     HermitConfigNotAction,
     #[error("The tag {0} was not found in the configuration")]
     TagNotFound(String),
+    #[error(transparent)]
+    PatchAction(#[from] PatchActionError),
 }
 
 #[derive(Debug, Error)]
@@ -80,6 +82,8 @@ pub enum PatchActionError {
     TomlSerialize(#[from] toml::ser::Error),
     #[error(transparent)]
     SerdecParse(#[from] jsonc_parser::errors::ParseError),
+    #[error(transparent)]
+    Render(#[from] handlebars::RenderError),
 }
 
 #[derive(Debug, Error)]
