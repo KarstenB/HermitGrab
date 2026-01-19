@@ -73,11 +73,11 @@ fn read_global_config(hermit_root: &Path) -> Arc<GlobalConfig> {
 #[tokio::test]
 async fn smoke_test() {
     let temp = TempDir::new().unwrap();
-    let temp_path = temp.path();
+    let temp_path = temp.path().canonicalize().unwrap();
     let temp_str = temp_path.to_str().unwrap();
     let _env_lock = ENV_LOCK.lock().await;
     unsafe {
-        std::env::set_var("HOME", temp_path);
+        std::env::set_var("HOME", &temp_path);
     }
     let hermit_root = temp_path.join(".hermitgrab");
     let cargo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
