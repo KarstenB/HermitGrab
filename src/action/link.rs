@@ -34,32 +34,14 @@ impl LinkAction {
         link_config: &LinkConfig,
         cfg: &HermitConfig,
         fallback: &Option<FallbackOperation>,
-    ) -> Result<Self, std::io::Error> {
-        let src = match cfg.expand_directory(&link_config.source) {
-            Ok(path) => path,
-            Err(e) => return Err(std::io::Error::other(e)),
-        };
-        let src = if src.is_absolute() {
-            link_config.source.clone()
-        } else {
-            cfg.directory().join(&link_config.source)
-        };
-        if !src.exists() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Source file does not exist: {}", src.display()),
-            ));
-        }
-        let src = src.canonicalize()?;
+    ) -> Result<Self, LinkActionError> {
+        let src = cfg.canonicalize_source_path::<LinkActionError>(&link_config.source)?;
         let rel_src = src
             .strip_prefix(cfg.directory())
             .unwrap_or(&link_config.source)
             .to_string_lossy()
             .to_string();
-        let dst = match cfg.expand_directory(&link_config.target) {
-            Ok(path) => path,
-            Err(e) => return Err(std::io::Error::other(e)),
-        };
+        let dst = cfg.expand_directory(&link_config.target)?;
         let rel_dst = dst
             .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)

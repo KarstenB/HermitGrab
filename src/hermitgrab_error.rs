@@ -52,6 +52,8 @@ pub enum ConfigError {
     TagNotFound(String),
     #[error(transparent)]
     PatchAction(#[from] PatchActionError),
+    #[error(transparent)]
+    LinkAction(#[from] LinkActionError),
 }
 
 #[derive(Debug, Error)]
@@ -154,10 +156,12 @@ pub enum ActionError {
 
 #[derive(Debug, Error)]
 pub enum LinkActionError {
-    #[error("Failed to create parent directory for destination {1} due to IO error: {0}")]
-    CreateParentDir(std::io::Error, PathBuf),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
     #[error(transparent)]
     FileOps(#[from] FileOpsError),
+    #[error(transparent)]
+    Render(#[from] handlebars::RenderError),
 }
 
 #[derive(Debug, Error)]

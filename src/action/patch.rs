@@ -104,7 +104,7 @@ impl SourceSpec {
             return Ok(self.clone());
         }
         let src = match &self.source {
-            FileOrText::File { file } => cfg.canonicalize_path::<PatchActionError>(file)?,
+            FileOrText::File { file } => cfg.canonicalize_source_path::<PatchActionError>(file)?,
             FileOrText::Text { text } => {
                 let contents = match &self.pre_processing {
                     PreprocessingType::Handlebars => {
@@ -127,12 +127,11 @@ impl SourceSpec {
                             .unwrap_or("rendered")
                     ))
                 };
-                let temp_file_path = cfg.canonicalize_path::<PatchActionError>(&temp_file_path)?;
                 std::fs::create_dir_all(
                     temp_file_path.parent().unwrap_or_else(|| cfg.directory()),
                 )?;
                 std::fs::write(&temp_file_path, contents)?;
-                temp_file_path
+                cfg.canonicalize_source_path::<PatchActionError>(&temp_file_path)?
             }
         };
         let content_type = if matches!(self.content_type, ContentType::Auto) {

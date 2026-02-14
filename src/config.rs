@@ -493,7 +493,7 @@ impl HermitConfig {
         }
     }
 
-    pub fn canonicalize_path<E>(&self, file: &PathBuf) -> Result<PathBuf, E>
+    pub fn canonicalize_source_path<E>(&self, file: &PathBuf) -> Result<PathBuf, E>
     where
         E: From<std::io::Error>,
         E: From<RenderError>,
@@ -504,6 +504,13 @@ impl HermitConfig {
         } else {
             self.directory().join(&src)
         };
+        if !src.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("File does not exist: {}", src.display()),
+            )
+            .into());
+        }
         Ok(src.canonicalize()?)
     }
 }
@@ -881,10 +888,11 @@ impl ConfigItem for LinkConfig {
         cfg: &HermitConfig,
         options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
-        Ok(Arc::new(Actions::Link(
-            LinkAction::new(self, cfg, &options.fallback)
-                .map_err(|e| ConfigError::Io(e, self.source.clone()))?,
-        )))
+        Ok(Arc::new(Actions::Link(LinkAction::new(
+            self,
+            cfg,
+            &options.fallback,
+        )?)))
     }
 
     fn id(&self) -> String {
