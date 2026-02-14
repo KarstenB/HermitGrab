@@ -14,7 +14,7 @@ use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 use crate::action::patch::SourceSpec;
 use crate::common_cli::{hint, prompt};
 use crate::config::{
-    CONF_FILE_NAME, FallbackOperation, FullSpecOrPath, GlobalConfig, PatchConfig, PatchType, Tag,
+    CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType, SourceSpecOrPath, Tag,
     load_hermit_config_editable,
 };
 use crate::file_ops::copy;
@@ -93,7 +93,7 @@ pub fn add_patch(
         .to_string()
         .into();
     let file_entry = PatchConfig {
-        source: FullSpecOrPath::FullSpec(SourceSpec::raw_path(source_filename.clone())),
+        source: SourceSpecOrPath::SourceSpec(SourceSpec::raw_path(source_filename.clone())),
         target,
         patch_type: patch_type.clone(),
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),

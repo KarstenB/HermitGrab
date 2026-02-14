@@ -225,6 +225,18 @@ pub enum DetectorConfig {
     ValueOf { value_of: String },
 }
 
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+pub struct HermitSettings {
+    /// If true, handlebars will error on missing variables instead of leaving them blank
+    pub strict_mode: bool,
+}
+
+impl HermitSettings {
+    pub fn is_default(&self) -> bool {
+        self == &Default::default()
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct HermitConfig {
     #[serde(skip)]
@@ -245,6 +257,9 @@ pub struct HermitConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub snippets: BTreeMap<String, String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "HermitSettings::is_default")]
+    pub settings: HermitSettings,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
@@ -477,6 +492,20 @@ impl HermitConfig {
             )
         }
     }
+
+    pub fn canonicalize_path<E>(&self, file: &PathBuf) -> Result<PathBuf, E>
+    where
+        E: From<std::io::Error>,
+        E: From<RenderError>,
+    {
+        let src = self.expand_directory(&file)?;
+        let src = if src.is_absolute() {
+            src.clone()
+        } else {
+            self.directory().join(&src)
+        };
+        Ok(src.canonicalize()?)
+    }
 }
 
 fn create_handlebars<'cfg, 'v>(
@@ -487,7 +516,6 @@ where
     'v: 'cfg,
 {
     let mut reg = Handlebars::new();
-    //reg.set_strict_mode(true);
     reg.register_helper(
         "snippet",
         Box::new(
@@ -508,6 +536,7 @@ where
         ),
     );
     reg.register_helper("math", Box::new(math_helper));
+    reg.set_strict_mode(cfg.settings.strict_mode);
     reg
 }
 
@@ -610,39 +639,43 @@ impl Display for PatchType {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum FullSpecOrPath {
+pub enum SourceSpecOrPath {
     Path(PathBuf),
-    FullSpec(SourceSpec),
+    SourceSpec(SourceSpec),
 }
 
-impl FullSpecOrPath {
+impl SourceSpecOrPath {
     pub fn path(&self) -> &PathBuf {
         match self {
-            FullSpecOrPath::Path(p) => p,
-            FullSpecOrPath::FullSpec(s) => s.file(),
+            SourceSpecOrPath::Path(p) => p,
+            SourceSpecOrPath::SourceSpec(s) => s.file(),
         }
     }
 
-    pub fn normalize(&self, cfg: &HermitConfig) -> Result<SourceSpec, PatchActionError> {
+    pub fn normalize(
+        &self,
+        cfg: &HermitConfig,
+        dst: &Path,
+    ) -> Result<SourceSpec, PatchActionError> {
         match self {
-            FullSpecOrPath::Path(p) => SourceSpec::raw_path(p.clone()).normalize(cfg),
-            FullSpecOrPath::FullSpec(s) => s.normalize(cfg),
+            SourceSpecOrPath::Path(p) => SourceSpec::raw_path(p.clone()).normalize(cfg, dst),
+            SourceSpecOrPath::SourceSpec(s) => s.normalize(cfg, dst),
         }
     }
 }
 
-impl From<FullSpecOrPath> for SourceSpec {
-    fn from(value: FullSpecOrPath) -> Self {
+impl From<SourceSpecOrPath> for SourceSpec {
+    fn from(value: SourceSpecOrPath) -> Self {
         match value {
-            FullSpecOrPath::Path(p) => SourceSpec::raw_path(p),
-            FullSpecOrPath::FullSpec(s) => s,
+            SourceSpecOrPath::Path(p) => SourceSpec::raw_path(p),
+            SourceSpecOrPath::SourceSpec(s) => s,
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PatchConfig {
-    pub source: FullSpecOrPath,
+    pub source: SourceSpecOrPath,
     pub target: PathBuf,
     #[serde(rename = "type", default)]
     pub patch_type: PatchType,

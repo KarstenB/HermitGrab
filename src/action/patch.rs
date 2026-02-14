@@ -24,6 +24,16 @@ pub enum ContentType {
     Yaml,
     Toml,
 }
+impl std::fmt::Display for ContentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentType::Auto => write!(f, "auto"),
+            ContentType::Json => write!(f, "json"),
+            ContentType::Yaml => write!(f, "yaml"),
+            ContentType::Toml => write!(f, "toml"),
+        }
+    }
+}
 
 impl ContentType {
     pub fn is_default(&self) -> bool {
@@ -53,12 +63,20 @@ pub enum FileOrText {
 
 #[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
 pub struct SourceSpec {
+    /// The source can either be a file path or a text string.
+    /// If it's a file path, it will be read and used as the patch content.
+    /// If it's a text string, it will be used directly as the patch content.
     #[serde(flatten)]
     pub source: FileOrText,
+    /// The pre-processing type to apply to the source content before using it as a patch.
     #[serde(default, skip_serializing_if = "PreprocessingType::is_default")]
     pub pre_processing: PreprocessingType,
+    /// This is the output file path after pot-processing the source content.
+    /// If not set a temporary file will be created for text sources.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rendered_file: Option<PathBuf>,
+    /// The content type of the source, which can be used to determine how to parse it.
+    /// On auto content type will be determined based on the file extension.
     #[serde(default, skip_serializing_if = "ContentType::is_default")]
     pub content_type: ContentType,
     // internal fields for providing references
@@ -81,59 +99,68 @@ impl SourceSpec {
         }
     }
 
-    pub fn normalize(&self, cfg: &HermitConfig) -> Result<Self, PatchActionError> {
+    pub fn normalize(&self, cfg: &HermitConfig, dst: &Path) -> Result<Self, PatchActionError> {
         if self.normalized {
             return Ok(self.clone());
         }
         let src = match &self.source {
-            FileOrText::File { file } => {
-                let src = match cfg.expand_directory(&file) {
-                    Ok(path) => path,
-                    Err(e) => return Err(PatchActionError::Io(std::io::Error::other(e))),
-                };
-                let src = if src.is_absolute() {
-                    src.clone()
-                } else {
-                    cfg.directory().join(&src)
-                };
-                src.canonicalize()?
-            }
+            FileOrText::File { file } => cfg.canonicalize_path::<PatchActionError>(file)?,
             FileOrText::Text { text } => {
-                let temp_dir = BASE_DIRS
-                    .data_dir()
-                    .join("hermitgrab")
-                    .join("patch_sources");
-                std::fs::create_dir_all(&temp_dir)?;
                 let contents = match &self.pre_processing {
                     PreprocessingType::Handlebars => {
                         cfg.render_handlebars(text, &BTreeMap::new())?
                     }
                     PreprocessingType::None => text.clone(),
                 };
-                let temp_file_path = temp_dir.join(format!(
-                    "source_{}.txt",
-                    self.rendered_file.as_ref().map_or_else(
-                        || blake3::hash(contents.as_bytes()).to_string(),
-                        |f| f.display().to_string()
-                    )
-                ));
-
+                let temp_file_path = if let Some(rendered_file) = &self.rendered_file {
+                    rendered_file.to_owned()
+                } else {
+                    let temp_dir = BASE_DIRS
+                        .data_dir()
+                        .join("hermitgrab")
+                        .join("patch_sources");
+                    temp_dir.join(format!(
+                        "source_{}.{}",
+                        blake3::hash(contents.as_bytes()).to_string(),
+                        dst.extension()
+                            .and_then(|ext| ext.to_str())
+                            .unwrap_or("rendered")
+                    ))
+                };
+                let temp_file_path = cfg.canonicalize_path::<PatchActionError>(&temp_file_path)?;
+                std::fs::create_dir_all(
+                    temp_file_path.parent().unwrap_or_else(|| cfg.directory()),
+                )?;
                 std::fs::write(&temp_file_path, contents)?;
-                temp_file_path.canonicalize()?
+                temp_file_path
             }
+        };
+        let content_type = if matches!(self.content_type, ContentType::Auto) {
+            src.extension()
+                .and_then(|ext| ext.to_str())
+                .map(|s| s.to_lowercase())
+                .and_then(|ext| match ext.as_str() {
+                    "json" | "jsonc" => Some(ContentType::Json),
+                    "yaml" | "yml" => Some(ContentType::Yaml),
+                    "toml" => Some(ContentType::Toml),
+                    _ => None,
+                })
+                .unwrap_or(ContentType::Json)
+        } else {
+            self.content_type
         };
 
         let rel_path = src
             .strip_prefix(cfg.directory())
             .unwrap_or(&src)
-            .to_string_lossy()
+            .display()
             .to_string();
         Ok(Self {
             source: FileOrText::File { file: src },
             rel_path,
-            pre_processing: PreprocessingType::default(),
+            pre_processing: PreprocessingType::None,
             rendered_file: None,
-            content_type: ContentType::default(),
+            content_type: content_type,
             normalized: true,
         })
     }
@@ -161,10 +188,7 @@ pub struct PatchAction {
 
 impl PatchAction {
     pub fn new(patch: &PatchConfig, cfg: &HermitConfig) -> Result<Self, PatchActionError> {
-        let dst = match cfg.expand_directory(&patch.target) {
-            Ok(path) => path,
-            Err(e) => return Err(PatchActionError::Io(std::io::Error::other(e))),
-        };
+        let dst = cfg.expand_directory(&patch.target)?;
         let rel_dst = dst
             .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)
@@ -172,7 +196,7 @@ impl PatchAction {
             .to_string();
         let requires = patch.get_all_requires(cfg);
         Ok(Self {
-            src: patch.source.normalize(cfg)?,
+            src: patch.source.normalize(cfg, &dst)?,
             dst,
             rel_dst,
             order: patch.total_order(cfg),
@@ -185,34 +209,37 @@ impl PatchAction {
 impl Action for PatchAction {
     fn short_description(&self) -> String {
         format!(
-            "{} {} with {}",
-            self.patch_type, self.rel_dst, self.src.rel_path
+            "{} {} with {} [{}]",
+            self.patch_type, self.rel_dst, self.src.rel_path, self.src.content_type
         )
     }
 
     fn long_description(&self) -> String {
         match &self.src.source {
             FileOrText::File { file } => format!(
-                "{} {} with file {}",
+                "{} {} with file {} [{}]",
                 self.patch_type,
                 self.dst.display(),
-                file.display()
+                file.display(),
+                self.src.content_type
             ),
             FileOrText::Text { text } => {
                 if text.len() > 30 {
                     let snippet = &text[..30];
                     return format!(
-                        "{} {} with '{}…'",
+                        "{} {} with '{}…' [{}]",
                         self.patch_type,
                         self.dst.display(),
-                        snippet.replace('\n', "\\n")
+                        snippet.replace('\n', "\\n"),
+                        self.src.content_type
                     );
                 } else {
                     format!(
-                        "{} {} with '{}'",
+                        "{} {} with '{}' [{}]",
                         self.patch_type,
                         self.dst.display(),
-                        text.replace("\n", "\\n")
+                        text.replace("\n", "\\n"),
+                        self.src.content_type
                     )
                 }
             }
@@ -227,12 +254,12 @@ impl Action for PatchAction {
         observer.action_progress(&self.id(), 0, 1, "Applying patch");
         match self.patch_type {
             PatchType::JsonMerge => {
-                merge_json(&self.src.file(), &self.dst)?;
+                merge_json(&self.src.file(), &self.dst, &self.src.content_type)?;
                 observer.action_progress(&self.id(), 1, 1, "Merge completed");
                 Ok(())
             }
             PatchType::JsonPatch => {
-                patch_json(&self.src.file(), &self.dst)?;
+                patch_json(&self.src.file(), &self.dst, &self.src.content_type)?;
                 observer.action_progress(&self.id(), 1, 1, "Patch completed");
                 Ok(())
             }
@@ -257,11 +284,15 @@ impl Action for PatchAction {
     }
 }
 
-pub fn merge_json(src: &Path, dst: &Path) -> Result<ActionOutput, PatchActionError> {
-    let (merge_content, _) = content_and_extension(src)?;
-    let (mut dst_content, lower_case_ext) = content_and_extension(dst)?;
+pub fn merge_json(
+    src: &Path,
+    dst: &Path,
+    content_type: &ContentType,
+) -> Result<ActionOutput, PatchActionError> {
+    let merge_content = content_and_extension(src, content_type)?;
+    let mut dst_content = content_and_extension(dst, content_type)?;
     json_patch::merge(&mut dst_content, &merge_content);
-    let updated_dst = to_content(dst_content, &lower_case_ext)?;
+    let updated_dst = to_content(dst_content, content_type)?;
     write_contents(dst, updated_dst)?;
     Ok(ActionOutput::new_stdout(format!(
         "Merged the contents of {src:?} into {dst:?}"
@@ -277,12 +308,16 @@ fn write_contents(dst: &Path, updated_dst: String) -> Result<(), PatchActionErro
     Ok(())
 }
 
-pub fn patch_json(src: &Path, dst: &Path) -> Result<ActionOutput, PatchActionError> {
-    let (merge_content, _) = content_and_extension(src)?;
+pub fn patch_json(
+    src: &Path,
+    dst: &Path,
+    content_type: &ContentType,
+) -> Result<ActionOutput, PatchActionError> {
+    let merge_content = content_and_extension(src, content_type)?;
     let patch: json_patch::Patch = serde_json::from_value(merge_content)?;
-    let (mut dst_json, lower_case_ext) = content_and_extension(dst)?;
+    let mut dst_json = content_and_extension(dst, content_type)?;
     json_patch::patch(&mut dst_json, &patch)?;
-    let updated_dst = to_content(dst_json, &lower_case_ext)?;
+    let updated_dst = to_content(dst_json, &content_type)?;
     write_contents(dst, updated_dst)?;
     Ok(ActionOutput::new_stdout(format!(
         "Merged the contents of {src:?} into {dst:?}"
@@ -290,59 +325,56 @@ pub fn patch_json(src: &Path, dst: &Path) -> Result<ActionOutput, PatchActionErr
 }
 
 fn content_and_extension(
-    dst: &Path,
-) -> Result<(serde_json::Value, Option<String>), PatchActionError> {
-    let dst_content = if dst.exists() {
-        std::fs::read_to_string(dst).map_err(PatchActionError::Io)?
+    file: &Path,
+    content_type: &ContentType,
+) -> Result<serde_json::Value, PatchActionError> {
+    let dst_content = if file.exists() {
+        std::fs::read_to_string(file).map_err(PatchActionError::Io)?
     } else {
         "".to_string()
     };
-    let lower_case_ext = dst
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|s| s.to_lowercase());
-    Ok((parse_file(dst_content, &lower_case_ext)?, lower_case_ext))
+    Ok(parse_file(dst_content, &content_type)?)
 }
 
 fn to_content(
     dst_json: serde_json::Value,
-    extension: &Option<String>,
+    content_type: &ContentType,
 ) -> Result<String, PatchActionError> {
-    match extension.as_deref() {
-        Some("yaml") | Some("yml") => {
-            let yaml = serde_yaml_ng::to_string(&dst_json)?;
-            Ok(yaml)
-        }
-        Some("toml") => {
-            let toml = toml::to_string_pretty(&dst_json)?;
-            Ok(toml)
-        }
+    match content_type {
+        ContentType::Yaml => Ok(serde_yaml_ng::to_string(&dst_json)?),
+        ContentType::Toml => Ok(toml::to_string_pretty(&dst_json)?),
+        ContentType::Json => Ok(serde_json::to_string_pretty(&dst_json)?),
         _ => {
-            let json = serde_json::to_string_pretty(&dst_json)?;
-            Ok(json)
+            panic!(
+                "Unsupported content type for serialization: {:?}",
+                content_type
+            )
         }
     }
 }
 
 fn parse_file(
     dst_content: String,
-    extension: &Option<String>,
+    content_type: &ContentType,
 ) -> Result<serde_json::Value, PatchActionError> {
-    match extension.as_deref() {
-        Some("yaml") | Some("yml") => {
+    match content_type {
+        ContentType::Yaml => {
             let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(&dst_content)?;
             Ok(serde_json::to_value(yaml)?)
         }
-        Some("toml") => {
+        ContentType::Toml => {
             let toml: toml::Value = toml::from_str(&dst_content)?;
             Ok(serde_json::to_value(toml)?)
         }
-        _ => {
+        ContentType::Json => {
             let value = jsonc_parser::parse_to_serde_value(&dst_content, &ParseOptions::default())?;
             if let Some(value) = value {
                 return Ok(value);
             }
             Ok(serde_json::from_str(&dst_content)?)
+        }
+        _ => {
+            panic!("Unsupported content type for parsing: {:?}", content_type)
         }
     }
 }
