@@ -14,14 +14,14 @@ experimental = ["interactive"]
 interactive = [ "dep:ratatui" ]
 
 [dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 blake3 = { version = "1.8.3", features = ["mmap", "neon"] }
-clap = { version = "4.5.54", features = ["derive", "env"] }
+clap = { version = "4.5.58", features = ["derive", "env"] }
 crossterm = "0.29.0"
 derive-where = "1.6.0"
 directories = "6.0.0"
 enum_dispatch = "0.3.13"
-git2 = { version = "0.20.3", features = [
+git2 = { version = "0.20.4", features = [
     "vendored-libgit2",
     "vendored-openssl"
 ] }
@@ -43,8 +43,8 @@ shellexpand = "3.1.1"
 simple_logger = "5.1.0"
 strum = "0.27.2"
 sys-info = "0.9.1"
-tempfile = "3.24.0"
-thiserror = "2.0.17"
+tempfile = "3.25.0"
+thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["full"] }
 toml = "0.9.8"
 toml_edit = { version = "0.23.9", features = ["serde"] }
@@ -52,7 +52,7 @@ ubi = { version = "0.9.0", optional = true, features = ["logging"] }
 # Fixed to 0.2.0 for ratatui compatability
 unicode-width = "0.2.2"
 which = "8.0.0"
-whoami = "2.0.2"
+whoami = "2.1.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [profile.release]
