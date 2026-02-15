@@ -20,13 +20,13 @@ use toml_edit::DocumentMut;
 
 use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
-use crate::action::patch::{PatchAction, SourceSpec};
-use crate::action::{Actions, ArcAction};
+use crate::action::patch::PatchAction;
+use crate::action::{Actions, ArcAction, SourceSpec};
 use crate::config::handlebar_math::math_helper;
 use crate::debug;
 use crate::detector::{detect_builtin_tags, get_detected_tags};
 use crate::file_ops::dirs::*;
-use crate::hermitgrab_error::{ApplyError, ConfigError, PatchActionError};
+use crate::hermitgrab_error::{ApplyError, ConfigError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
@@ -396,7 +396,7 @@ impl HermitConfig {
             ),
             (
                 "ubi".to_string(),
-                format!("{} ubi -- ", HERMIT_EXE.display()),
+                format!("\"{}\" ubi -- ", HERMIT_EXE.display()),
             ),
         ]);
         if let Some(sha) = option_env!("CARGO_MAKE_GIT_HEAD_LAST_COMMIT_HASH_PREFIX") {
@@ -493,7 +493,11 @@ impl HermitConfig {
         }
     }
 
-    pub fn canonicalize_source_path<E>(&self, file: &PathBuf) -> Result<PathBuf, E>
+    pub fn canonicalize_source_path<E>(
+        &self,
+        file: &PathBuf,
+        file_should_exist: bool,
+    ) -> Result<PathBuf, E>
     where
         E: From<std::io::Error>,
         E: From<RenderError>,
@@ -504,12 +508,15 @@ impl HermitConfig {
         } else {
             self.directory().join(&src)
         };
-        if !src.exists() {
+        if file_should_exist & !src.exists() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("File does not exist: {}", src.display()),
             )
             .into());
+        }
+        if !file_should_exist {
+            return Ok(src);
         }
         Ok(src.canonicalize()?)
     }
@@ -576,14 +583,14 @@ pub enum LinkType {
 
 impl ValueEnum for LinkType {
     fn value_variants<'a>() -> &'a [Self] {
-        &[LinkType::Soft, LinkType::Hard, LinkType::Copy]
+        &[Self::Soft, Self::Hard, Self::Copy]
     }
 
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
         match self {
-            LinkType::Soft => Some(clap::builder::PossibleValue::new("soft")),
-            LinkType::Hard => Some(clap::builder::PossibleValue::new("hard")),
-            LinkType::Copy => Some(clap::builder::PossibleValue::new("copy")),
+            Self::Soft => Some(clap::builder::PossibleValue::new("soft")),
+            Self::Hard => Some(clap::builder::PossibleValue::new("hard")),
+            Self::Copy => Some(clap::builder::PossibleValue::new("copy")),
         }
     }
 }
@@ -604,9 +611,9 @@ impl FromStr for LinkType {
 impl Display for LinkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LinkType::Soft => write!(f, "soft"),
-            LinkType::Hard => write!(f, "hard"),
-            LinkType::Copy => write!(f, "copy"),
+            Self::Soft => write!(f, "soft"),
+            Self::Hard => write!(f, "hard"),
+            Self::Copy => write!(f, "copy"),
         }
     }
 }
@@ -618,10 +625,10 @@ impl ValueEnum for PatchType {
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
         match self {
-            PatchType::JsonMerge => {
+            Self::JsonMerge => {
                 Some(PossibleValue::new("JsonMerge").aliases(["jsonmerge", "merge"]))
             }
-            PatchType::JsonPatch => {
+            Self::JsonPatch => {
                 Some(PossibleValue::new("JsonPatch").aliases(["jsonpatch", "patch"]))
             }
         }
@@ -638,8 +645,8 @@ pub enum PatchType {
 impl Display for PatchType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PatchType::JsonMerge => write!(f, "JsonMerge"),
-            PatchType::JsonPatch => write!(f, "JsonPatch"),
+            Self::JsonMerge => write!(f, "JsonMerge"),
+            Self::JsonPatch => write!(f, "JsonPatch"),
         }
     }
 }
@@ -652,21 +659,21 @@ pub enum SourceSpecOrPath {
 }
 
 impl SourceSpecOrPath {
-    pub fn path(&self) -> &PathBuf {
+    pub fn path(&self) -> &Path {
         match self {
-            SourceSpecOrPath::Path(p) => p,
-            SourceSpecOrPath::SourceSpec(s) => s.file(),
+            Self::Path(p) => p,
+            Self::SourceSpec(s) => s.file(),
         }
     }
 
-    pub fn normalize(
-        &self,
-        cfg: &HermitConfig,
-        dst: &Path,
-    ) -> Result<SourceSpec, PatchActionError> {
+    pub fn normalize<E>(&self, cfg: &HermitConfig, dst: &Path) -> Result<SourceSpec, E>
+    where
+        E: From<std::io::Error>,
+        E: From<RenderError>,
+    {
         match self {
-            SourceSpecOrPath::Path(p) => SourceSpec::raw_path(p.clone()).normalize(cfg, dst),
-            SourceSpecOrPath::SourceSpec(s) => s.normalize(cfg, dst),
+            Self::Path(p) => SourceSpec::raw_path(p.clone()).normalize(cfg, dst),
+            Self::SourceSpec(s) => s.normalize(cfg, dst),
         }
     }
 }
@@ -716,9 +723,9 @@ impl ConfigItem for PatchConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LinkConfig {
-    pub source: PathBuf,
+    pub source: SourceSpecOrPath,
     pub target: PathBuf,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default_link")]

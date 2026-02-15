@@ -6,6 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::action::install::execute_script;
 use crate::config::{DetectorConfig, GlobalConfig, Tag};
+use crate::debug;
 
 pub fn detect_builtin_tags() -> BTreeSet<Tag> {
     let mut tags = BTreeSet::new();
@@ -102,7 +103,13 @@ fn create_detected_tag(
 ) -> Result<Option<Tag>, std::io::Error> {
     match config {
         DetectorConfig::EnableIf { enable_if } => {
-            if execute_script(enable_if)?.status.success() {
+            let output = execute_script(enable_if)?;
+            debug!(
+                "Detector '{}' exited with code {}",
+                name,
+                output.status.code().unwrap_or(-1)
+            );
+            if output.status.success() {
                 Ok(Some(Tag::new(
                     name,
                     crate::config::Source::Detector(name.clone()),
@@ -113,21 +120,27 @@ fn create_detected_tag(
         }
         DetectorConfig::EnableIfNot { enable_if_not } => {
             let output = execute_script(enable_if_not)?;
-            if let Some(exit_code) = output.status.code() {
-                if exit_code != 0 {
-                    Ok(Some(Tag::new(
-                        name,
-                        crate::config::Source::Detector(name.clone()),
-                    )))
-                } else {
-                    Ok(None)
-                }
+            debug!(
+                "Detector '{}' exited with code {}",
+                name,
+                output.status.code().unwrap_or(-1)
+            );
+            if !output.status.success() {
+                Ok(Some(Tag::new(
+                    name,
+                    crate::config::Source::Detector(name.clone()),
+                )))
             } else {
                 Ok(None)
             }
         }
         DetectorConfig::ValueOf { value_of } => {
             let output = execute_script(value_of)?;
+            debug!(
+                "Detector '{}' exited with code {}",
+                name,
+                output.status.code().unwrap_or(-1)
+            );
             if output.status.success() {
                 let string = String::from_utf8(output.stdout)
                     .map_err(|_| std::io::Error::other("File not utf-8 encoded"))?;

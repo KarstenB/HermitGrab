@@ -1,3 +1,6 @@
+[settings]
+strict_mode = true
+
 [[patch]]
 source = "test.json"
 target = "target.json"
@@ -9,3 +12,24 @@ target = "target2.json"
 [[patch]]
 source = { text = '{"num_cpus":{{math sys.cpu_num "/" 2}}}', pre_processing = "Handlebars" }
 target = "target.json"
+
+[[link]]
+source = { text = """
+[wsl2]
+processors = {{math sys.cpu_num "/" 2}}
+""", pre_processing = "Handlebars", rendered_file = ".wslconfig.rendered" }
+target = "~/.wslconfig"
+
+[[link]]
+source = { text = """
+[wsl2]
+processors = 9
+""", rendered_file = ".wslconfig.rendered" }
+target = "~/.wslconfig_unrendered"
+
+[[link]]
+source = { text = """
+[wsl2]
+processors = 8
+""" }
+target = "~/.wslconfig_no_render_file"

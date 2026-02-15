@@ -10,7 +10,7 @@ use derive_where::derive_where;
 use serde::Serialize;
 
 use crate::action::{Action, ActionObserver, ActionOutput, Status, id_from_hash};
-use crate::config::ConfigItem;
+use crate::config::{ArcHermitConfig, ConfigItem};
 use crate::hermitgrab_error::{ActionError, ConfigError, InstallActionError};
 use crate::{HermitConfig, InstallConfig, RequireTag};
 
@@ -101,7 +101,11 @@ impl Action for InstallAction {
     fn requires(&self) -> &[RequireTag] {
         &self.requires
     }
-    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError> {
+    fn execute(
+        &self,
+        observer: &Arc<impl ActionObserver>,
+        _cfg: &ArcHermitConfig,
+    ) -> Result<(), ActionError> {
         observer.action_progress(&self.id(), 0, 2, "Checking installation");
         if !self.install_required()? {
             observer.action_progress(&self.id(), 2, 2, "Installation not required");

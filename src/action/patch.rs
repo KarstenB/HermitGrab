@@ -8,171 +8,16 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use jsonc_parser::ParseOptions;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use crate::action::{Action, ActionObserver, ActionOutput, Status};
-use crate::config::{ConfigItem, PatchConfig, PatchType};
+use crate::action::{
+    Action, ActionObserver, ActionOutput, ContentType, FileOrText, PreprocessingType, SourceSpec,
+    Status,
+};
+use crate::config::{ArcHermitConfig, ConfigItem, PatchConfig, PatchType};
 use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::{ActionError, PatchActionError};
 use crate::{HermitConfig, RequireTag};
-
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Default, Clone, Copy)]
-pub enum ContentType {
-    #[default]
-    Auto,
-    Json,
-    Yaml,
-    Toml,
-}
-impl std::fmt::Display for ContentType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ContentType::Auto => write!(f, "auto"),
-            ContentType::Json => write!(f, "json"),
-            ContentType::Yaml => write!(f, "yaml"),
-            ContentType::Toml => write!(f, "toml"),
-        }
-    }
-}
-
-impl ContentType {
-    pub fn is_default(&self) -> bool {
-        *self == ContentType::default()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Default, Clone, Copy)]
-pub enum PreprocessingType {
-    #[default]
-    None,
-    Handlebars,
-}
-
-impl PreprocessingType {
-    pub fn is_default(&self) -> bool {
-        *self == PreprocessingType::default()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
-#[serde(untagged)]
-pub enum FileOrText {
-    File { file: PathBuf },
-    Text { text: String },
-}
-
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
-pub struct SourceSpec {
-    /// The source can either be a file path or a text string.
-    /// If it's a file path, it will be read and used as the patch content.
-    /// If it's a text string, it will be used directly as the patch content.
-    #[serde(flatten)]
-    pub source: FileOrText,
-    /// The pre-processing type to apply to the source content before using it as a patch.
-    #[serde(default, skip_serializing_if = "PreprocessingType::is_default")]
-    pub pre_processing: PreprocessingType,
-    /// This is the output file path after pot-processing the source content.
-    /// If not set a temporary file will be created for text sources.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rendered_file: Option<PathBuf>,
-    /// The content type of the source, which can be used to determine how to parse it.
-    /// On auto content type will be determined based on the file extension.
-    #[serde(default, skip_serializing_if = "ContentType::is_default")]
-    pub content_type: ContentType,
-    // internal fields for providing references
-    #[serde(skip)]
-    rel_path: String,
-    #[serde(skip)]
-    normalized: bool,
-}
-
-impl SourceSpec {
-    pub fn raw_path(path: PathBuf) -> Self {
-        let rel_path = path.display().to_string();
-        Self {
-            source: FileOrText::File { file: path },
-            rel_path,
-            pre_processing: PreprocessingType::default(),
-            rendered_file: None,
-            content_type: ContentType::default(),
-            normalized: false,
-        }
-    }
-
-    pub fn normalize(&self, cfg: &HermitConfig, dst: &Path) -> Result<Self, PatchActionError> {
-        if self.normalized {
-            return Ok(self.clone());
-        }
-        let src = match &self.source {
-            FileOrText::File { file } => cfg.canonicalize_source_path::<PatchActionError>(file)?,
-            FileOrText::Text { text } => {
-                let contents = match &self.pre_processing {
-                    PreprocessingType::Handlebars => {
-                        cfg.render_handlebars(text, &BTreeMap::new())?
-                    }
-                    PreprocessingType::None => text.clone(),
-                };
-                let temp_file_path = if let Some(rendered_file) = &self.rendered_file {
-                    rendered_file.to_owned()
-                } else {
-                    let temp_dir = BASE_DIRS
-                        .data_dir()
-                        .join("hermitgrab")
-                        .join("patch_sources");
-                    temp_dir.join(format!(
-                        "source_{}.{}",
-                        blake3::hash(contents.as_bytes()).to_string(),
-                        dst.extension()
-                            .and_then(|ext| ext.to_str())
-                            .unwrap_or("rendered")
-                    ))
-                };
-                std::fs::create_dir_all(
-                    temp_file_path.parent().unwrap_or_else(|| cfg.directory()),
-                )?;
-                std::fs::write(&temp_file_path, contents)?;
-                cfg.canonicalize_source_path::<PatchActionError>(&temp_file_path)?
-            }
-        };
-        let content_type = if matches!(self.content_type, ContentType::Auto) {
-            src.extension()
-                .and_then(|ext| ext.to_str())
-                .map(|s| s.to_lowercase())
-                .and_then(|ext| match ext.as_str() {
-                    "json" | "jsonc" => Some(ContentType::Json),
-                    "yaml" | "yml" => Some(ContentType::Yaml),
-                    "toml" => Some(ContentType::Toml),
-                    _ => None,
-                })
-                .unwrap_or(ContentType::Json)
-        } else {
-            self.content_type
-        };
-
-        let rel_path = src
-            .strip_prefix(cfg.directory())
-            .unwrap_or(&src)
-            .display()
-            .to_string();
-        Ok(Self {
-            source: FileOrText::File { file: src },
-            rel_path,
-            pre_processing: PreprocessingType::None,
-            rendered_file: None,
-            content_type: content_type,
-            normalized: true,
-        })
-    }
-
-    pub fn file(&self) -> &PathBuf {
-        match &self.source {
-            FileOrText::File { file } => file,
-            FileOrText::Text { text: _ } => {
-                panic!("SourceSpec with text source does not have a file path")
-            }
-        }
-    }
-}
 
 #[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct PatchAction {
@@ -195,7 +40,7 @@ impl PatchAction {
             .to_string();
         let requires = patch.get_all_requires(cfg);
         Ok(Self {
-            src: patch.source.normalize(cfg, &dst)?,
+            src: patch.source.normalize::<PatchActionError>(cfg, &dst)?,
             dst,
             rel_dst,
             order: patch.total_order(cfg),
@@ -249,17 +94,33 @@ impl Action for PatchAction {
         &self.requires
     }
 
-    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError> {
-        observer.action_progress(&self.id(), 0, 1, "Applying patch");
+    fn execute(
+        &self,
+        observer: &Arc<impl ActionObserver>,
+        cfg: &ArcHermitConfig,
+    ) -> Result<(), ActionError> {
+        observer.action_progress(&self.id(), 0, 2, "Applying patch");
+        if matches!(self.src.pre_processing, PreprocessingType::Handlebars) {
+            observer.action_progress(&self.id(), 1, 2, "Rendering source with Handlebars");
+            let content =
+                std::fs::read_to_string(self.src.file()).map_err(|e| PatchActionError::Io(e))?;
+            let rendered_content = cfg
+                .render_handlebars(&content, &BTreeMap::new())
+                .map_err(|e| PatchActionError::Render(e))?;
+            std::fs::write(self.src.file(), rendered_content)
+                .map_err(|e| PatchActionError::Io(e))?;
+        } else {
+            observer.action_progress(&self.id(), 1, 2, "No preprocessing required");
+        }
         match self.patch_type {
             PatchType::JsonMerge => {
                 merge_json(&self.src.file(), &self.dst, &self.src.content_type)?;
-                observer.action_progress(&self.id(), 1, 1, "Merge completed");
+                observer.action_progress(&self.id(), 2, 2, "Merge completed");
                 Ok(())
             }
             PatchType::JsonPatch => {
                 patch_json(&self.src.file(), &self.dst, &self.src.content_type)?;
-                observer.action_progress(&self.id(), 1, 1, "Patch completed");
+                observer.action_progress(&self.id(), 2, 2, "Patch completed");
                 Ok(())
             }
         }

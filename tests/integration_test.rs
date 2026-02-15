@@ -121,7 +121,7 @@ async fn smoke_test() {
     .unwrap();
     assert_file_exists(hermit_root.join("test1/hermit.toml"));
     // Compare config
-    let expected = test_results.join("add_config_test1.json");
+    let expected = test_results.join("add_config_test1_expected.json");
     let actual = test_results.join("add_config_test1_actual.json");
     commands::execute(
         Commands::Get {
@@ -159,7 +159,7 @@ async fn smoke_test() {
     .await
     .unwrap();
     assert_file_exists(hermit_root.join("test1/testfile.txt"));
-    let expected = test_results.join("add_testfile_link.json");
+    let expected = test_results.join("add_testfile_link_expected.json");
     let actual = test_results.join("add_testfile_link_actual.json");
     commands::execute(
         Commands::Get {
@@ -199,7 +199,7 @@ async fn smoke_test() {
     .await
     .unwrap();
     assert_file_exists(hermit_root.join("test1/anotherfile.txt"));
-    let expected = test_results.join("add_anotherfile_link.json");
+    let expected = test_results.join("add_anotherfile_link_expected.json");
     let actual = test_results.join("add_anotherfile_link_actual.json");
     commands::execute(
         Commands::Get {
@@ -216,7 +216,7 @@ async fn smoke_test() {
     assert_json_eq(&expected, &actual, temp_str);
 
     // Step 6: Status --tag test1
-    let expected = test_results.join("unlinked_status.json");
+    let expected = test_results.join("unlinked_status_expected.json");
     let actual = test_results.join("unlinked_status_actual.json");
     commands::execute(
         Commands::Status {
@@ -251,7 +251,7 @@ async fn smoke_test() {
     .await
     .unwrap();
     assert_file_exists(hermit_root.join("hermit.toml"));
-    let expected = test_results.join("add_profile_test1.json");
+    let expected = test_results.join("add_profile_test1_expected.json");
     let actual = test_results.join("add_profile_test1_actual.json");
     commands::execute(
         Commands::Get {
@@ -297,7 +297,7 @@ async fn smoke_test() {
     .unwrap();
 
     // Step 10: Apply expecting failure
-    let expected = test_results.join("failed_apply.json");
+    let expected = test_results.join("failed_apply_expected.json");
     let actual = test_results.join("failed_apply_actual.json");
     commands::execute(
         Commands::Apply {
@@ -318,7 +318,7 @@ async fn smoke_test() {
     assert_json_eq(&expected, &actual, temp_str);
 
     // Step 11: Apply with force and parallel
-    let expected = test_results.join("forced_apply.json");
+    let expected = test_results.join("forced_apply_expected.json");
     let actual = test_results.join("forced_apply_actual.json");
     commands::execute(
         Commands::Apply {
@@ -347,7 +347,7 @@ async fn smoke_test() {
         &temp_path.join("testfile.txt"),
         &hermit_root.join("test1/testfile.txt"),
     );
-    let expected = test_results.join("linked_status.json");
+    let expected = test_results.join("linked_status_expected.json");
     let actual = test_results.join("linked_status_actual.json");
     commands::execute(
         Commands::Status {
@@ -391,7 +391,7 @@ async fn smoke_test() {
     )
     .await
     .unwrap();
-    let expected = test_results.join("add_patch.json");
+    let expected = test_results.join("add_patch_expected.json");
     let actual = test_results.join("add_patch_actual.json");
     commands::execute(
         Commands::Get {
@@ -410,7 +410,7 @@ async fn smoke_test() {
     assert_file_exists(hermit_root.join("cargo/patch.toml"));
 
     // Step 13: Apply patch
-    let expected = test_results.join("applied_patch.json");
+    let expected = test_results.join("applied_patch_expected.json");
     let actual = test_results.join("applied_patch_actual.json");
     commands::execute(
         Commands::Apply {
@@ -429,7 +429,7 @@ async fn smoke_test() {
     .await
     .unwrap();
     assert_json_eq(&expected, &actual, temp_str);
-    let expected = test_results.join("patched_config.toml");
+    let expected = test_results.join("patched_config_actual.toml");
     let actual = cargo_config;
     let exp = fs::read_to_string(&expected).unwrap();
     let act = fs::read_to_string(&actual).unwrap();
@@ -460,7 +460,7 @@ async fn ordered_test(parallel: bool) {
     eprintln!("config under test: {config_under_test:?}");
     std::fs::create_dir_all(&hermit_root).unwrap();
     std::fs::copy(config_under_test, hermit_root.join("hermit.toml")).unwrap();
-    let expected = test_results.join("exec_ordered.json");
+    let expected = test_results.join("exec_ordered_expected.json");
     let actual = test_results.join("exec_ordered_actual.json");
     commands::execute(
         Commands::Apply {

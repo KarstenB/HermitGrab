@@ -116,7 +116,7 @@ pub async fn apply_with_tags(
     hermitgrab_info!("Active tags: {}", active_tags_str);
     let actions = create_execution_plan(global_config, cli)?;
     let filtered_actions = actions.filter_actions_by_tags(&active_tags);
-    present_execution_plan(&filtered_actions, parallel);
+    present_execution_plan(&filtered_actions, parallel, cli.verbose);
     if !cli.confirm {
         confirm_with_user()?;
     }
@@ -157,7 +157,7 @@ pub async fn apply_with_tags(
     Ok(())
 }
 
-fn present_execution_plan(sorted: &ExecutionPlan, parallel: bool) {
+fn present_execution_plan(sorted: &ExecutionPlan, parallel: bool, verbose: bool) {
     if parallel {
         hermitgrab_info!("Execution plan with parallel execution:");
     } else {
@@ -169,7 +169,16 @@ fn present_execution_plan(sorted: &ExecutionPlan, parallel: bool) {
             crate::order!("Start of {}", a.get_order());
             last_order = a.get_order();
         }
-        crate::step!("[{:>2}] {}", i + 1, a.short_description());
+        if verbose {
+            crate::step!(
+                "[{:>2}] {} (order {})",
+                i + 1,
+                a.long_description(),
+                a.get_order()
+            );
+        } else {
+            crate::step!("[{:>2}] {}", i + 1, a.short_description());
+        }
     }
 }
 
