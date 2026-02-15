@@ -411,6 +411,7 @@ impl HermitConfig {
             "hermit": hermit,
         });
         let reg = create_handlebars(variables, cfg);
+        debug!("Rendering content {content}");
         reg.render_template(content, &object)
     }
 
@@ -550,6 +551,10 @@ where
         ),
     );
     reg.register_helper("math", Box::new(math_helper));
+    debug!(
+        "Setting handlebars strict mode to {}",
+        cfg.settings.strict_mode
+    );
     reg.set_strict_mode(cfg.settings.strict_mode);
     reg
 }

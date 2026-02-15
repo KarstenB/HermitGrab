@@ -1,4 +1,7 @@
-use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext};
+use handlebars::{
+    Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError,
+    RenderErrorReason,
+};
 
 pub fn math_helper(
     h: &Helper,
@@ -12,17 +15,31 @@ pub fn math_helper(
     let p2 = h.param(2);
 
     if p0.is_none() {
-        return Ok(());
+        return Err(RenderErrorReason::Other(
+            "At least one parameter is required for math helper".to_string(),
+        )
+        .into());
     }
 
     // Check if it's an infix operation (val op val)
     let is_infix = p1
         .and_then(|v| v.value().as_str())
-        .map_or(false, |s| is_binary_operator(s));
+        .map_or(false, |s| is_unary_operator(s));
 
     if is_infix {
-        let l_val = get_f64(p0);
-        let operator = p1.unwrap().value().as_str().unwrap();
+        let Some(operator) = p1 else {
+            return Err(RenderErrorReason::Other(
+                "Second parameter must be an operator string".to_string(),
+            )
+            .into());
+        };
+        let Some(operator) = operator.value().as_str() else {
+            return Err(RenderErrorReason::Other(
+                "Operator parameter must be a string".to_string(),
+            )
+            .into());
+        };
+        let l_val = get_f64(p0, &format!("left hand side of operator '{operator}'"))?;
 
         // --- Special Handling for "format" ---
         if operator == "format" {
@@ -53,7 +70,7 @@ pub fn math_helper(
             }
         } else {
             // --- Standard Math Operations ---
-            let r_val = get_f64(p2); // For math, 2nd arg is a number
+            let r_val = get_f64(p2, &format!("right hand sight of operator '{operator}'"))?; // For math, 2nd arg is a number
             match operator {
                 "+" => write!(out, "{}", l_val + r_val)?,
                 "-" => write!(out, "{}", l_val - r_val)?,
@@ -67,13 +84,22 @@ pub fn math_helper(
                 "^" => write!(out, "{}", (l_val as i64 ^ r_val as i64))?,
                 "<<" => write!(out, "{}", (l_val as i64) << (r_val as i64))?,
                 ">>" => write!(out, "{}", (l_val as i64) >> (r_val as i64))?,
-                _ => write!(out, "{}", l_val)?,
+                _ => {
+                    return Err(RenderErrorReason::Other(format!(
+                        "Unsupported operator: {operator}"
+                    ))
+                    .into());
+                }
             }
         }
     } else {
         // --- Unary Operations ---
-        let operator = p0.and_then(|v| v.value().as_str()).unwrap_or("");
-        let val = get_f64(p1);
+        let operator = p0.and_then(|v| v.value().as_str()).ok_or_else(|| {
+            RenderErrorReason::Other(format!(
+                "First argument to unary math function is not a string: {p0:#?}"
+            ))
+        })?;
+        let val = get_f64(p1, "'{operator}' argument")?;
 
         match operator {
             "abs" => write!(out, "{}", val.abs())?,
@@ -82,7 +108,12 @@ pub fn math_helper(
             "round" => write!(out, "{}", val.round())?,
             "sqrt" => write!(out, "{}", val.sqrt())?,
             "not" | "~" => write!(out, "{}", !(val as i64))?,
-            _ => write!(out, "{}", val)?,
+            _ => {
+                return Err(RenderErrorReason::Other(format!(
+                    "Unsupported unary operator: {operator}"
+                ))
+                .into());
+            }
         }
     };
 
@@ -119,21 +150,36 @@ fn parse_rust_format(s: &str) -> (bool, Option<usize>, Option<usize>) {
 }
 
 // --- Utilities ---
-fn is_binary_operator(s: &str) -> bool {
+fn is_unary_operator(s: &str) -> bool {
     matches!(
         s,
         "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | "max" | "min" | "format"
     )
 }
 
-fn get_f64(param: Option<&handlebars::PathAndJson>) -> f64 {
-    param
-        .and_then(|v| {
+fn get_f64(param: Option<&handlebars::PathAndJson>, context: &str) -> Result<f64, RenderError> {
+    if let Some(v) = param {
+        if let Some(n) = v.value().as_f64() {
+            return Ok(n);
+        }
+        if let Some(s) = v.value().as_str() {
+            if let Ok(n) = s.parse::<f64>() {
+                return Ok(n);
+            } else {
+                return Err(RenderErrorReason::Other(format!(
+                    "Failed to parse '{}' as a number for {context}",
+                    s
+                ))
+                .into());
+            }
+        }
+        return Err(RenderErrorReason::Other(format!(
+            "Expected a number or numeric string for {context}, got: {}",
             v.value()
-                .as_f64()
-                .or_else(|| v.value().as_str().and_then(|s| s.parse::<f64>().ok()))
-        })
-        .unwrap_or(0.0)
+        ))
+        .into());
+    }
+    Err(RenderErrorReason::Other(format!("Parameter for {context} is absent")).into())
 }
 
 #[cfg(test)]
