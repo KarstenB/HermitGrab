@@ -9,7 +9,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:XDG_BIN_HOME/fish/completions/rustup.fish_in_path_XDG_BIN:soft:abort:+xdg_test": {
@@ -21,7 +24,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_cache_dir/fish/completions/rustup.fish_XDG_CACHE:soft:abort:+xdg_test": {
@@ -33,7 +39,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_cache_dir/fish/completions/rustup.fish_in_path_XDG_CACHE:soft:abort:+xdg_test": {
@@ -45,7 +54,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_config_dir/fish/completions/rustup.fish_XDG_CONFIG:soft:abort:+xdg_test": {
@@ -57,7 +69,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_config_dir/fish/completions/rustup.fish_in_path_XDG_CONFIG:soft:abort:+xdg_test": {
@@ -69,7 +84,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_data_dir/fish/completions/rustup.fish_XDG_DATA:soft:abort:+xdg_test": {
@@ -81,7 +99,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_data_dir/fish/completions/rustup.fish_in_path_XDG_DATA:soft:abort:+xdg_test": {
@@ -93,7 +114,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_runtime_dir/fish/completions/rustup.fish_XDG_RUNTIME:soft:abort:+xdg_test": {
@@ -105,7 +129,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_state_dir/fish/completions/rustup.fish_XDG_STATE:soft:abort:+xdg_test": {
@@ -117,7 +144,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:completions/rustup.fish:xdg_state_dir/fish/completions/rustup.fish_in_path_XDG_STATE:soft:abort:+xdg_test": {
@@ -129,7 +159,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/completions/rustup.fish"
+        }
       }
     },
     "LinkAction:config.fish:XDG_BIN_HOME/fish/config.fish_XDG_BIN:soft:abort:+xdg_test": {
@@ -141,7 +174,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:XDG_BIN_HOME/fish/config.fish_in_path_XDG_BIN:soft:abort:+xdg_test": {
@@ -153,7 +189,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_cache_dir/fish/config.fish_XDG_CACHE:soft:abort:+xdg_test": {
@@ -165,7 +204,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_cache_dir/fish/config.fish_in_path_XDG_CACHE:soft:abort:+xdg_test": {
@@ -177,7 +219,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_config_dir/fish/config.fish_XDG_CONFIG:soft:abort:+xdg_test": {
@@ -189,7 +234,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_config_dir/fish/config.fish_in_path_XDG_CONFIG:soft:abort:+xdg_test": {
@@ -201,7 +249,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_data_dir/fish/config.fish_XDG_DATA:soft:abort:+xdg_test": {
@@ -213,7 +264,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_data_dir/fish/config.fish_in_path_XDG_DATA:soft:abort:+xdg_test": {
@@ -225,7 +279,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_runtime_dir/fish/config.fish_XDG_RUNTIME:soft:abort:+xdg_test": {
@@ -237,7 +294,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_state_dir/fish/config.fish_XDG_STATE:soft:abort:+xdg_test": {
@@ -249,7 +309,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     },
     "LinkAction:config.fish:xdg_state_dir/fish/config.fish_in_path_XDG_STATE:soft:abort:+xdg_test": {
@@ -261,7 +324,10 @@
         "requires": [
           "+xdg_test"
         ],
-        "src": "TEMP_DIR/.hermitgrab/config.fish"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/config.fish"
+        }
       }
     }
   },

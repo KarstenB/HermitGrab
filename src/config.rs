@@ -21,7 +21,8 @@ use toml_edit::DocumentMut;
 use crate::action::install::InstallAction;
 use crate::action::link::LinkAction;
 use crate::action::patch::PatchAction;
-use crate::action::{Actions, ArcAction};
+use crate::action::{Actions, ArcAction, SourceSpec};
+use crate::config::handlebar_math::math_helper;
 use crate::debug;
 use crate::detector::{detect_builtin_tags, get_detected_tags};
 use crate::file_ops::dirs::*;
@@ -29,6 +30,8 @@ use crate::hermitgrab_error::{ApplyError, ConfigError};
 
 pub const CONF_FILE_NAME: &str = "hermit.toml";
 pub const DEFAULT_PROFILE: &str = "default";
+
+mod handlebar_math;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Source {
@@ -222,10 +225,24 @@ pub enum DetectorConfig {
     ValueOf { value_of: String },
 }
 
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+pub struct HermitSettings {
+    /// If true, handlebars will error on missing variables instead of leaving them blank
+    pub strict_mode: bool,
+}
+
+impl HermitSettings {
+    pub fn is_default(&self) -> bool {
+        self == &Default::default()
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct HermitConfig {
     #[serde(skip)]
     path: PathBuf,
+    #[serde(skip)]
+    canonicalize_dir: PathBuf,
     #[serde(skip)]
     global_cfg: Weak<GlobalConfig>,
     #[serde(default)]
@@ -240,6 +257,9 @@ pub struct HermitConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub snippets: BTreeMap<String, String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "HermitSettings::is_default")]
+    pub settings: HermitSettings,
     #[serde(default)]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub requires: BTreeSet<RequireTag>,
@@ -259,14 +279,37 @@ pub type ArcHermitConfig = Arc<HermitConfig>;
 impl HermitConfig {
     pub fn create_new(path: &Path, global_cfg: Weak<GlobalConfig>) -> Self {
         HermitConfig {
-            path: path.to_path_buf(),
             global_cfg,
             ..Default::default()
         }
+        .update_path(path)
     }
 
-    pub fn path(&self) -> &Path {
-        self.path.as_path()
+    pub fn update_path<P: AsRef<Path>>(self, path: P) -> Self {
+        let full_path = path
+            .as_ref()
+            .canonicalize()
+            .unwrap_or_else(|_| path.as_ref().to_path_buf());
+        let full_dir = full_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .canonicalize()
+            .unwrap_or_else(|_| {
+                full_path
+                    .parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf()
+            });
+        HermitConfig {
+            path: full_path,
+            canonicalize_dir: full_dir,
+            ..self
+        }
+    }
+
+    /// Path to hermit.toml file
+    pub fn hermit_file(&self) -> &Path {
+        &self.path
     }
 
     pub fn global_config(&self) -> Arc<GlobalConfig> {
@@ -283,8 +326,9 @@ impl HermitConfig {
         Ok(())
     }
 
+    /// Directory containing the hermit.toml file
     pub fn directory(&self) -> &Path {
-        self.path.parent().expect("Expected to get parent")
+        &self.canonicalize_dir
     }
 
     pub fn config_items(&self) -> impl Iterator<Item = &dyn ConfigItem> {
@@ -352,7 +396,7 @@ impl HermitConfig {
             ),
             (
                 "ubi".to_string(),
-                format!("{} ubi -- ", HERMIT_EXE.display()),
+                format!("\"{}\" ubi -- ", HERMIT_EXE.display()),
             ),
         ]);
         if let Some(sha) = option_env!("CARGO_MAKE_GIT_HEAD_LAST_COMMIT_HASH_PREFIX") {
@@ -367,13 +411,14 @@ impl HermitConfig {
             "hermit": hermit,
         });
         let reg = create_handlebars(variables, cfg);
+        debug!("Rendering content {content}");
         reg.render_template(content, &object)
     }
 
     fn collect_dir_map(&self, global_config: &Arc<GlobalConfig>) -> BTreeMap<&'static str, String> {
         let mut paths = vec![
             (
-                "this",
+                "here",
                 self.directory()
                     .to_path_buf()
                     .to_str()
@@ -448,6 +493,34 @@ impl HermitConfig {
             )
         }
     }
+
+    pub fn canonicalize_source_path<E>(
+        &self,
+        file: &PathBuf,
+        file_should_exist: bool,
+    ) -> Result<PathBuf, E>
+    where
+        E: From<std::io::Error>,
+        E: From<RenderError>,
+    {
+        let src = self.expand_directory(&file)?;
+        let src = if src.is_absolute() {
+            src.clone()
+        } else {
+            self.directory().join(&src)
+        };
+        if file_should_exist & !src.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("File does not exist: {}", src.display()),
+            )
+            .into());
+        }
+        if !file_should_exist {
+            return Ok(src);
+        }
+        Ok(src.canonicalize()?)
+    }
 }
 
 fn create_handlebars<'cfg, 'v>(
@@ -458,7 +531,6 @@ where
     'v: 'cfg,
 {
     let mut reg = Handlebars::new();
-    //reg.set_strict_mode(true);
     reg.register_helper(
         "snippet",
         Box::new(
@@ -478,6 +550,12 @@ where
             },
         ),
     );
+    reg.register_helper("math", Box::new(math_helper));
+    debug!(
+        "Setting handlebars strict mode to {}",
+        cfg.settings.strict_mode
+    );
+    reg.set_strict_mode(cfg.settings.strict_mode);
     reg
 }
 
@@ -510,14 +588,14 @@ pub enum LinkType {
 
 impl ValueEnum for LinkType {
     fn value_variants<'a>() -> &'a [Self] {
-        &[LinkType::Soft, LinkType::Hard, LinkType::Copy]
+        &[Self::Soft, Self::Hard, Self::Copy]
     }
 
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
         match self {
-            LinkType::Soft => Some(clap::builder::PossibleValue::new("soft")),
-            LinkType::Hard => Some(clap::builder::PossibleValue::new("hard")),
-            LinkType::Copy => Some(clap::builder::PossibleValue::new("copy")),
+            Self::Soft => Some(clap::builder::PossibleValue::new("soft")),
+            Self::Hard => Some(clap::builder::PossibleValue::new("hard")),
+            Self::Copy => Some(clap::builder::PossibleValue::new("copy")),
         }
     }
 }
@@ -538,9 +616,9 @@ impl FromStr for LinkType {
 impl Display for LinkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LinkType::Soft => write!(f, "soft"),
-            LinkType::Hard => write!(f, "hard"),
-            LinkType::Copy => write!(f, "copy"),
+            Self::Soft => write!(f, "soft"),
+            Self::Hard => write!(f, "hard"),
+            Self::Copy => write!(f, "copy"),
         }
     }
 }
@@ -552,10 +630,10 @@ impl ValueEnum for PatchType {
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
         match self {
-            PatchType::JsonMerge => {
+            Self::JsonMerge => {
                 Some(PossibleValue::new("JsonMerge").aliases(["jsonmerge", "merge"]))
             }
-            PatchType::JsonPatch => {
+            Self::JsonPatch => {
                 Some(PossibleValue::new("JsonPatch").aliases(["jsonpatch", "patch"]))
             }
         }
@@ -572,15 +650,51 @@ pub enum PatchType {
 impl Display for PatchType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PatchType::JsonMerge => write!(f, "JsonMerge"),
-            PatchType::JsonPatch => write!(f, "JsonPatch"),
+            Self::JsonMerge => write!(f, "JsonMerge"),
+            Self::JsonPatch => write!(f, "JsonPatch"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum SourceSpecOrPath {
+    Path(PathBuf),
+    SourceSpec(SourceSpec),
+}
+
+impl SourceSpecOrPath {
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::Path(p) => p,
+            Self::SourceSpec(s) => s.file(),
+        }
+    }
+
+    pub fn normalize<E>(&self, cfg: &HermitConfig, dst: &Path) -> Result<SourceSpec, E>
+    where
+        E: From<std::io::Error>,
+        E: From<RenderError>,
+    {
+        match self {
+            Self::Path(p) => SourceSpec::raw_path(p.clone()).normalize(cfg, dst),
+            Self::SourceSpec(s) => s.normalize(cfg, dst),
+        }
+    }
+}
+
+impl From<SourceSpecOrPath> for SourceSpec {
+    fn from(value: SourceSpecOrPath) -> Self {
+        match value {
+            SourceSpecOrPath::Path(p) => SourceSpec::raw_path(p),
+            SourceSpecOrPath::SourceSpec(s) => s,
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PatchConfig {
-    pub source: PathBuf,
+    pub source: SourceSpecOrPath,
     pub target: PathBuf,
     #[serde(rename = "type", default)]
     pub patch_type: PatchType,
@@ -602,9 +716,7 @@ impl ConfigItem for PatchConfig {
         cfg: &HermitConfig,
         _options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
-        Ok(Arc::new(Actions::Patch(
-            PatchAction::new(self, cfg).map_err(|e| ConfigError::Io(e, self.source.clone()))?,
-        )))
+        Ok(Arc::new(Actions::Patch(PatchAction::new(self, cfg)?)))
     }
 
     fn id(&self) -> String {
@@ -616,9 +728,9 @@ impl ConfigItem for PatchConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LinkConfig {
-    pub source: PathBuf,
+    pub source: SourceSpecOrPath,
     pub target: PathBuf,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default_link")]
@@ -788,10 +900,11 @@ impl ConfigItem for LinkConfig {
         cfg: &HermitConfig,
         options: &CliOptions,
     ) -> Result<ArcAction, ConfigError> {
-        Ok(Arc::new(Actions::Link(
-            LinkAction::new(self, cfg, &options.fallback)
-                .map_err(|e| ConfigError::Io(e, self.source.clone()))?,
-        )))
+        Ok(Arc::new(Actions::Link(LinkAction::new(
+            self,
+            cfg,
+            &options.fallback,
+        )?)))
     }
 
     fn id(&self) -> String {
@@ -1078,9 +1191,9 @@ pub fn load_hermit_config<P: AsRef<Path>>(
 ) -> Result<Arc<HermitConfig>, ConfigError> {
     let content = std::fs::read_to_string(path.as_ref())
         .map_err(|e| ConfigError::Io(e, path.as_ref().to_path_buf()))?;
-    let mut config: HermitConfig = toml::from_str(&content)
+    let config: HermitConfig = toml::from_str(&content)
         .map_err(|e| ConfigError::DeserializeToml(e, path.as_ref().to_path_buf()))?;
-    config.path = path.as_ref().to_path_buf();
+    let mut config = config.update_path(path);
     config.global_cfg = global_config;
     Ok(Arc::new(config))
 }

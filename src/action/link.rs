@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use itertools::Itertools;
 use serde::Serialize;
 
-use crate::action::{Action, ActionObserver, Status};
-use crate::config::{ConfigItem, FallbackOperation, FileStatus};
+use crate::action::{Action, ActionObserver, PreprocessingType, SourceSpec, Status};
+use crate::config::{ArcHermitConfig, ConfigItem, FallbackOperation, FileStatus};
 use crate::file_ops::dirs::BASE_DIRS;
 use crate::file_ops::{check_copied, link_files};
 use crate::hermitgrab_error::{ActionError, LinkActionError};
@@ -18,10 +19,8 @@ use crate::{HermitConfig, LinkConfig, LinkType, RequireTag};
 #[derive(Serialize, Debug, Hash, PartialEq)]
 pub struct LinkAction {
     #[serde(skip)]
-    rel_src: String,
-    #[serde(skip)]
     rel_dst: String,
-    src: PathBuf,
+    src: SourceSpec,
     dst: PathBuf,
     link_type: LinkType,
     requires: Vec<RequireTag>,
@@ -34,32 +33,8 @@ impl LinkAction {
         link_config: &LinkConfig,
         cfg: &HermitConfig,
         fallback: &Option<FallbackOperation>,
-    ) -> Result<Self, std::io::Error> {
-        let src = match cfg.expand_directory(&link_config.source) {
-            Ok(path) => path,
-            Err(e) => return Err(std::io::Error::other(e)),
-        };
-        let src = if src.is_absolute() {
-            link_config.source.clone()
-        } else {
-            cfg.directory().join(&link_config.source)
-        };
-        if !src.exists() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Source file does not exist: {}", src.display()),
-            ));
-        }
-        let src = src.canonicalize()?;
-        let rel_src = src
-            .strip_prefix(cfg.directory())
-            .unwrap_or(&link_config.source)
-            .to_string_lossy()
-            .to_string();
-        let dst = match cfg.expand_directory(&link_config.target) {
-            Ok(path) => path,
-            Err(e) => return Err(std::io::Error::other(e)),
-        };
+    ) -> Result<Self, LinkActionError> {
+        let dst = cfg.expand_directory(&link_config.target)?;
         let rel_dst = dst
             .strip_prefix(BASE_DIRS.home_dir())
             .unwrap_or(&dst)
@@ -68,8 +43,7 @@ impl LinkAction {
         let requires = link_config.get_all_requires(cfg);
         let fallback = (*fallback).unwrap_or(link_config.fallback);
         Ok(Self {
-            src,
-            rel_src,
+            src: link_config.source.normalize::<LinkActionError>(cfg, &dst)?,
             dst,
             rel_dst,
             link_type: link_config.link,
@@ -98,7 +72,7 @@ impl LinkAction {
                 let Ok(read_link) = read_link else {
                     return FileStatus::FailedToReadSymlink(actual_dst);
                 };
-                if read_link != self.src {
+                if &read_link != self.src.file() {
                     return FileStatus::SymlinkDestinationMismatch(actual_dst, read_link);
                 }
                 FileStatus::Ok
@@ -110,9 +84,11 @@ impl LinkAction {
                         Ok(meta) => meta,
                         Err(e) => return FileStatus::FailedToGetMetadata(actual_dst, e),
                     };
-                    let src_meta = match self.src.metadata() {
+                    let src_meta = match self.src.file().metadata() {
                         Ok(src_meta) => src_meta,
-                        Err(e) => return FileStatus::FailedToGetMetadata(self.src.clone(), e),
+                        Err(e) => {
+                            return FileStatus::FailedToGetMetadata(self.src.file().clone(), e);
+                        }
                     };
                     use std::os::unix::fs::MetadataExt;
                     let dst_ino = dst_meta.ino();
@@ -130,7 +106,7 @@ impl LinkAction {
                     return check_copied(quick, &self.src, &actual_dst);
                 }
             }
-            LinkType::Copy => check_copied(quick, &self.src, &actual_dst),
+            LinkType::Copy => check_copied(quick, &self.src.file(), &actual_dst),
         }
     }
 }
@@ -142,13 +118,13 @@ impl Action for LinkAction {
             LinkType::Hard => "Hardlink",
             LinkType::Copy => "Copy",
         };
-        format!("{link_type_str} {} -> {}", self.rel_src, self.rel_dst)
+        format!("{link_type_str} {} -> {}", self.src.rel_path, self.rel_dst)
     }
 
     fn long_description(&self) -> String {
         format!(
             "Symlink from {} to {} (tags: {:?})",
-            self.src.display(),
+            self.src.file().display(),
             self.dst.display(),
             self.requires
         )
@@ -158,18 +134,34 @@ impl Action for LinkAction {
         &self.requires
     }
 
-    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError> {
-        observer.action_progress(&self.id(), 0, 1, "Linking files");
-        link_files(&self.src, &self.dst, &self.link_type, &self.fallback)
+    fn execute(
+        &self,
+        observer: &Arc<impl ActionObserver>,
+        cfg: &ArcHermitConfig,
+    ) -> Result<(), ActionError> {
+        observer.action_progress(&self.id(), 0, 2, "Linking files");
+        if matches!(self.src.pre_processing, PreprocessingType::Handlebars) {
+            observer.action_progress(&self.id(), 1, 2, "Rendering source with Handlebars");
+            let content =
+                std::fs::read_to_string(self.src.file()).map_err(|e| LinkActionError::Io(e))?;
+            let rendered_content = cfg
+                .render_handlebars(&content, &BTreeMap::new())
+                .map_err(|e| LinkActionError::Render(e))?;
+            std::fs::write(self.src.file(), rendered_content)
+                .map_err(|e| LinkActionError::Io(e))?;
+        } else {
+            observer.action_progress(&self.id(), 1, 2, "No preprocessing required");
+        }
+        link_files(&self.src.file(), &self.dst, &self.link_type, &self.fallback)
             .map_err(LinkActionError::FileOps)?;
-        observer.action_progress(&self.id(), 1, 1, "Linking completed");
+        observer.action_progress(&self.id(), 2, 2, "Linking completed");
         Ok(())
     }
 
     fn id(&self) -> String {
         format!(
             "LinkAction:{}:{}:{}:{}:{}",
-            self.rel_src,
+            self.src.rel_path,
             self.rel_dst,
             self.link_type,
             self.fallback,

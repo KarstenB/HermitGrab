@@ -1,6 +1,6 @@
 {
 	"name": "Build Hermitgrab DevContainer",
-	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bookworm",
+	"image": "mcr.microsoft.com/devcontainers/rust:2-1-trixie",
 	"mounts": [
 		// My primary driver is a MacBook and bind mounts are quite slow, so target is a volume
 		{

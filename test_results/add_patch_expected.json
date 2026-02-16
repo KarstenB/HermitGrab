@@ -2,7 +2,9 @@
   "cargo/hermit.toml": {
     "patch": [
       {
-        "source": "patch.toml",
+        "source": {
+          "file": "patch.toml"
+        },
         "target": "~/.cargo/config.toml",
         "type": "JsonMerge",
         "requires": [
