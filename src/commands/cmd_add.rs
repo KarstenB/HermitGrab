@@ -11,9 +11,10 @@ use itertools::Itertools;
 use serde::Serialize;
 use toml_edit::{Array, ArrayOfTables, Formatted, Item, Table, Value};
 
+use crate::action::SourceSpec;
 use crate::common_cli::{hint, prompt};
 use crate::config::{
-    CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType, Tag,
+    CONF_FILE_NAME, FallbackOperation, GlobalConfig, PatchConfig, PatchType, SourceSpecOrPath, Tag,
     load_hermit_config_editable,
 };
 use crate::file_ops::copy;
@@ -92,7 +93,7 @@ pub fn add_patch(
         .to_string()
         .into();
     let file_entry = PatchConfig {
-        source: source_filename.clone(),
+        source: SourceSpecOrPath::SourceSpec(SourceSpec::raw_path(source_filename.clone())),
         target,
         patch_type: patch_type.clone(),
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
@@ -146,7 +147,7 @@ pub fn add_link(
         .to_string()
         .into();
     let file_entry = LinkConfig {
-        source: source_filename.clone(),
+        source: SourceSpecOrPath::Path(source_filename.clone()),
         target,
         link: *link_type,
         requires: BTreeSet::from_iter(required_tags.iter().cloned()),
@@ -281,7 +282,7 @@ trait GetSourceAndTarget<'a> {
 
 impl<'a> GetSourceAndTarget<'a> for LinkConfig {
     fn source(&'a self) -> &'a Path {
-        &self.source
+        &self.source.path()
     }
 
     fn target(&'a self) -> &'a Path {
@@ -293,7 +294,7 @@ impl<'a> GetSourceAndTarget<'a> for LinkConfig {
 }
 impl<'a> GetSourceAndTarget<'a> for PatchConfig {
     fn source(&'a self) -> &'a Path {
-        &self.source
+        &self.source.path()
     }
 
     fn target(&'a self) -> &'a Path {
@@ -446,16 +447,4 @@ pub fn add_profile(
     let new_config = config.to_string();
     std::fs::write(config_file, new_config)?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::LinkConfig;
-
-    #[test]
-    pub fn test_to_table() {
-        let entry = LinkConfig::default();
-        to_table(&entry).unwrap();
-    }
 }

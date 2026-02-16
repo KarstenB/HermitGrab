@@ -47,12 +47,12 @@ impl ExecutionPlan {
         let actions_by_order = self.get_actions_by_order();
         let mut results = Vec::new();
         for (_, actions) in actions_by_order {
-            for a in actions {
-                observer.action_started(&a);
-                let res = a.execute(observer);
-                observer.action_finished(&a, &res);
+            for (cfg, action) in actions {
+                observer.action_started(&action);
+                let res = action.execute(observer, &cfg);
+                observer.action_finished(&action, &res);
                 results.push(ActionResult {
-                    action: a.clone(),
+                    action: action.clone(),
                     result: res,
                 });
             }
@@ -60,14 +60,14 @@ impl ExecutionPlan {
         results
     }
 
-    fn get_actions_by_order(&self) -> BTreeMap<u64, Vec<Arc<Actions>>> {
+    fn get_actions_by_order(&self) -> BTreeMap<u64, Vec<(ArcHermitConfig, Arc<Actions>)>> {
         let mut actions_by_order = BTreeMap::new();
-        for (_, a) in self.actions.iter() {
+        for (cfg, a) in self.actions.iter() {
             let order = a.get_order();
             actions_by_order
                 .entry(order)
                 .or_insert_with(Vec::new)
-                .push(a.clone());
+                .push((cfg.clone(), a.clone()));
         }
         actions_by_order
     }
@@ -80,11 +80,11 @@ impl ExecutionPlan {
         let mut results = Vec::new();
         for (_, actions) in actions_by_order {
             let mut tasks = JoinSet::new();
-            for action in actions {
+            for (cfg, action) in actions {
                 let observer = observer.clone();
                 tasks.spawn(async move {
                     observer.action_started(&action);
-                    let result = action.execute(&observer);
+                    let result = action.execute(&observer, &cfg);
                     observer.action_finished(&action, &result);
                     ActionResult { action, result }
                 });

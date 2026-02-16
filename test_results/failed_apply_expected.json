@@ -10,7 +10,10 @@
           "+test1",
           "-another"
         ],
-        "src": "TEMP_DIR/.hermitgrab/test1/anotherfile.txt"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/test1/anotherfile.txt"
+        }
       }
     },
     "LinkAction:testfile.txt:testfile.txt:soft:abort:+test1": {
@@ -22,7 +25,10 @@
         "requires": [
           "+test1"
         ],
-        "src": "TEMP_DIR/.hermitgrab/test1/testfile.txt"
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/test1/testfile.txt"
+        }
       }
     }
   },

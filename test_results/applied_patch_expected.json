@@ -8,7 +8,10 @@
         "requires": [
           "+cargo"
         ],
-        "src": "TEMP_DIR/.hermitgrab/cargo/patch.toml"
+        "src": {
+          "content_type": "Toml",
+          "file": "TEMP_DIR/.hermitgrab/cargo/patch.toml"
+        }
       }
     }
   },
@@ -17,7 +20,7 @@
       "error": null,
       "ok": true,
       "output": null,
-      "short_description": "JsonMerge .cargo/config.toml with patch.toml"
+      "short_description": "JsonMerge .cargo/config.toml with patch.toml [toml]"
     }
   }
 }

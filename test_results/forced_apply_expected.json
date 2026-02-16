@@ -1,0 +1,49 @@
+{
+  "actions": {
+    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:+test1,-another": {
+      "Link": {
+        "dst": "TEMP_DIR/anotherfile.txt",
+        "fallback": "BackupOverwrite",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+test1",
+          "-another"
+        ],
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/test1/anotherfile.txt"
+        }
+      }
+    },
+    "LinkAction:testfile.txt:testfile.txt:soft:backupoverwrite:+test1": {
+      "Link": {
+        "dst": "TEMP_DIR/testfile.txt",
+        "fallback": "BackupOverwrite",
+        "link_type": "soft",
+        "order": 0,
+        "requires": [
+          "+test1"
+        ],
+        "src": {
+          "content_type": "Unknown",
+          "file": "TEMP_DIR/.hermitgrab/test1/testfile.txt"
+        }
+      }
+    }
+  },
+  "results": {
+    "LinkAction:anotherfile.txt:anotherfile.txt:soft:backupoverwrite:+test1,-another": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink anotherfile.txt -> anotherfile.txt"
+    },
+    "LinkAction:testfile.txt:testfile.txt:soft:backupoverwrite:+test1": {
+      "error": null,
+      "ok": true,
+      "output": null,
+      "short_description": "Symlink testfile.txt -> testfile.txt"
+    }
+  }
+}

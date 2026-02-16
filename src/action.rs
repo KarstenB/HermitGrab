@@ -4,12 +4,16 @@
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use enum_dispatch::enum_dispatch;
-use serde::Serialize;
+use handlebars::RenderError;
+use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
 
+use crate::config::ArcHermitConfig;
+use crate::file_ops::dirs::BASE_DIRS;
 use crate::hermitgrab_error::ActionError;
 use crate::{HermitConfig, RequireTag};
 pub mod install;
@@ -68,6 +72,178 @@ impl IntoIterator for ActionOutput {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Default, Clone, Copy)]
+pub enum PreprocessingType {
+    #[default]
+    None,
+    Handlebars,
+}
+
+impl PreprocessingType {
+    pub fn is_default(&self) -> bool {
+        *self == PreprocessingType::default()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum FileOrText {
+    File { file: PathBuf },
+    Text { text: String },
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Default, Clone, Copy)]
+pub enum ContentType {
+    #[default]
+    Auto,
+    Json,
+    Yaml,
+    Toml,
+    Unknown,
+}
+impl std::fmt::Display for ContentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentType::Auto => write!(f, "auto"),
+            ContentType::Json => write!(f, "json"),
+            ContentType::Yaml => write!(f, "yaml"),
+            ContentType::Toml => write!(f, "toml"),
+            ContentType::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
+impl ContentType {
+    pub fn is_default(&self) -> bool {
+        *self == ContentType::default()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Clone)]
+pub struct SourceSpec {
+    /// The source can either be a file path or a text string.
+    /// If it's a file path, it will be read and used as the content.
+    /// If it's a text string, it will be used directly as the content.
+    #[serde(flatten)]
+    pub source: FileOrText,
+    /// The pre-processing type to apply to the source content before usage.
+    #[serde(default, skip_serializing_if = "PreprocessingType::is_default")]
+    pub pre_processing: PreprocessingType,
+    /// This is the output file path after pot-processing the source content.
+    /// If not set a temporary file will be created for text sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rendered_file: Option<PathBuf>,
+    /// The content type of the source, which can be used to determine how to parse it.
+    /// On auto content type will be determined based on the src or as fall back the destination file extension.
+    ///
+    /// NOTE: This is ignored in link actions.
+    #[serde(default, skip_serializing_if = "ContentType::is_default")]
+    pub content_type: ContentType,
+    // internal fields for providing references
+    #[serde(skip)]
+    rel_path: String,
+    #[serde(skip)]
+    normalized: bool,
+}
+
+impl SourceSpec {
+    pub fn raw_path(path: PathBuf) -> Self {
+        let rel_path = path.display().to_string();
+        Self {
+            source: FileOrText::File { file: path },
+            rel_path,
+            pre_processing: PreprocessingType::default(),
+            rendered_file: None,
+            content_type: ContentType::default(),
+            normalized: false,
+        }
+    }
+
+    pub fn normalize<E>(&self, cfg: &HermitConfig, dst: &Path) -> Result<Self, E>
+    where
+        E: From<std::io::Error>,
+        E: From<RenderError>,
+    {
+        if self.normalized {
+            return Ok(self.clone());
+        }
+        let src = match &self.source {
+            FileOrText::File { file } => {
+                let src = cfg.canonicalize_source_path::<E>(file, true)?;
+                if let Some(render_file) = self.rendered_file.as_ref() {
+                    let pre_render = cfg.canonicalize_source_path::<E>(render_file, false)?;
+                    if src != pre_render {
+                        std::fs::create_dir_all(
+                            pre_render.parent().unwrap_or_else(|| cfg.directory()),
+                        )?;
+                        std::fs::copy(&src, &pre_render)?;
+                    }
+                    pre_render
+                } else {
+                    src
+                }
+            }
+            FileOrText::Text { text } => {
+                let temp_file_path = if let Some(rendered_file) = &self.rendered_file {
+                    cfg.canonicalize_source_path::<E>(rendered_file, false)?
+                } else {
+                    let temp_dir = BASE_DIRS.data_dir().join("hermitgrab").join("sources");
+                    temp_dir.join(format!(
+                        "text_{}.{}",
+                        blake3::hash(text.as_bytes()).to_string(),
+                        dst.extension()
+                            .and_then(|ext| ext.to_str())
+                            .unwrap_or("rendered")
+                    ))
+                };
+                std::fs::create_dir_all(
+                    temp_file_path.parent().unwrap_or_else(|| cfg.directory()),
+                )?;
+                std::fs::write(&temp_file_path, text)?;
+                cfg.canonicalize_source_path::<E>(&temp_file_path, true)?
+            }
+        };
+        let content_type = if matches!(self.content_type, ContentType::Auto) {
+            src.extension()
+                .or_else(|| dst.extension())
+                .and_then(|ext| ext.to_str())
+                .map(|s| s.to_lowercase())
+                .map(|ext| match ext.as_str() {
+                    "json" | "jsonc" => ContentType::Json,
+                    "yaml" | "yml" => ContentType::Yaml,
+                    "toml" => ContentType::Toml,
+                    _ => ContentType::Unknown,
+                })
+                .unwrap_or(ContentType::Unknown)
+        } else {
+            self.content_type
+        };
+
+        let rel_path = src
+            .strip_prefix(cfg.directory())
+            .unwrap_or(&src)
+            .display()
+            .to_string();
+        Ok(Self {
+            source: FileOrText::File { file: src },
+            rel_path,
+            pre_processing: self.pre_processing,
+            rendered_file: None,
+            content_type: content_type,
+            normalized: true,
+        })
+    }
+
+    pub fn file(&self) -> &PathBuf {
+        match &self.source {
+            FileOrText::File { file } => file,
+            FileOrText::Text { text: _ } => {
+                panic!("SourceSpec with text source does not have a file path")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub enum Status {
     Ok(String),
@@ -92,7 +268,11 @@ pub trait Action: Send + Sync {
     }
     fn requires(&self) -> &[RequireTag];
     fn id(&self) -> String;
-    fn execute(&self, observer: &Arc<impl ActionObserver>) -> Result<(), ActionError>;
+    fn execute(
+        &self,
+        observer: &Arc<impl ActionObserver>,
+        cfg: &ArcHermitConfig,
+    ) -> Result<(), ActionError>;
     fn get_status(&self, cfg: &HermitConfig, quick: bool) -> Status;
     fn get_order(&self) -> u64;
 }
