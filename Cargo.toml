@@ -16,7 +16,7 @@ interactive = [ "dep:ratatui" ]
 [dependencies]
 anyhow = "1.0.101"
 blake3 = { version = "1.8.3", features = ["mmap", "neon"] }
-clap = { version = "4.5.58", features = ["derive", "env"] }
+clap = { version = "4.5.60", features = ["derive", "env"] }
 crossterm = "0.29.0"
 derive-where = "1.6.0"
 directories = "6.0.0"
