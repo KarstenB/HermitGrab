@@ -14,7 +14,7 @@ experimental = ["interactive"]
 interactive = [ "dep:ratatui" ]
 
 [dependencies]
-anyhow = "1.0.101"
+anyhow = "1.0.102"
 blake3 = { version = "1.8.3", features = ["mmap", "neon"] }
 clap = { version = "4.5.58", features = ["derive", "env"] }
 crossterm = "0.29.0"
