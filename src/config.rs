@@ -531,6 +531,12 @@ where
     'v: 'cfg,
 {
     let mut reg = Handlebars::new();
+    // our configuration is not intended to generate HTML, so disable the
+    // default HTML escaping behaviour.  without this quotes and other
+    // characters would be replaced by HTML entities (e.g. `"` ->
+    // `&quot;`), which breaks command snippets and file templates.
+    reg.register_escape_fn(|s| s.to_string());
+
     reg.register_helper(
         "snippet",
         Box::new(
@@ -1235,7 +1241,7 @@ mod tests {
             let mut hermit = HermitConfig::create_new(Path::new("bla/hermit.toml"), weak.clone());
             hermit
                 .snippets
-                .insert("echo1".to_string(), "echo 1".to_string());
+                .insert("echo1".to_string(), "echo \"1\"".to_string());
             hermit.snippets.insert(
                 "echo2".to_string(),
                 "echo 2;{{ snippet echo1 }}".to_string(),
@@ -1256,10 +1262,20 @@ mod tests {
             panic!("Failed to get cfg");
         };
         let snippet = hermit_cfg.get_snippet("echo1", &BTreeMap::new()).unwrap();
-        assert_eq!(snippet, "echo 1");
+        assert_eq!(snippet, "echo \"1\"");
         let snippet = hermit_cfg.get_snippet("echo2", &BTreeMap::new()).unwrap();
-        assert_eq!(snippet, "echo 2;echo 1");
+        assert_eq!(snippet, "echo 2;echo \"1\"");
         let snippet = hermit_cfg.get_snippet("echo3", &BTreeMap::new()).unwrap();
-        assert_eq!(snippet, "echo 3;echo 2;echo 1");
+        assert_eq!(snippet, "echo 3;echo 2;echo \"1\"");
+
+        // regression test: previously the templating engine would HTML-
+        // escape helper output, turning `"` into `&quot;`.  Verify the
+        // escape hook we register prevents that behaviour.
+        let vars = BTreeMap::new();
+        let reg = create_handlebars(&vars, &hermit_cfg);
+        let rendered = reg
+            .render_template("{{ snippet echo1 }}", &serde_json::json!({}))
+            .unwrap();
+        assert_eq!(rendered, "echo \"1\"");
     }
 }

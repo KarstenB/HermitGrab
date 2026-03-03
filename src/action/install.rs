@@ -234,6 +234,29 @@ mod tests {
     }
 
     #[test]
+    fn test_install_command_preserves_quotes() {
+        // construct a temporary hermit config with a snippet containing
+        // double-quotes and ensure that when the install command template is
+        // rendered the quotes survive (they were previously HTML-escaped).
+        // we only need a local hermit config; global config is not used
+        // during rendering when snippets are available in the local config.
+        let global = Arc::new(GlobalConfig::default());
+        let mut hermit = HermitConfig::create_new(
+            PathBuf::from("hermit.toml").as_path(),
+            Arc::downgrade(&global),
+        );
+        hermit
+            .snippets
+            .insert("ubi".to_string(), "\"/path/to/hermit\" ubi -- ".to_string());
+        let hermit_cfg = Arc::new(hermit);
+        let mut install_config = InstallConfig::default();
+        install_config.name = "foo".to_string();
+        install_config.install = "{{ snippet ubi }} -p foo".to_string();
+        let action = InstallAction::new(&install_config, &hermit_cfg).unwrap();
+        assert_eq!(action.install_cmd, "\"/path/to/hermit\" ubi --  -p foo");
+    }
+
+    #[test]
     fn test_stable_hash_generation() {
         let global_cfg = Arc::new(GlobalConfig::default());
         let path_buf = PathBuf::from("hermit.toml");
