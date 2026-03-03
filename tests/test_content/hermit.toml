@@ -33,3 +33,16 @@ source = { text = """
 processors = 8
 """ }
 target = "~/.wslconfig_no_render_file"
+
+[snippets]
+ubi = """
+#!/bin/bash
+{{ hermit.ubi }} -p {{ var.name }} -i ${HOME}/.local/bin
+"""
+
+[[install]]
+name = "sharkdp/bat"
+install = "{{ snippet ubi }}"
+
+[install.variables]
+exe = "bat"
