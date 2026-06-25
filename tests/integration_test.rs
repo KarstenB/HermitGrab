@@ -14,7 +14,7 @@ use tempfile::TempDir;
 use tokio::sync::Mutex;
 
 /// This lock will be used for preventing modification of the HOME variable
-/// when multiple tests are started simultaenously. This also means that
+/// when multiple tests are started simultaneously. This also means that
 /// only one test can run at a time. This is due to the usage of the $HOME
 /// variable in the ordered test.
 static ENV_LOCK: Mutex<()> = Mutex::const_new(());

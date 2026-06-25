@@ -126,7 +126,7 @@ pub fn create_execution_plan(
                     HermitConfigNotAction => {}
                     e => {
                         crate::error!(
-                            "An error occured when preparing action in {path} for {}: {e}",
+                            "An error occurred when preparing action in {path} for {}: {e}",
                             item.id()
                         )
                     }
