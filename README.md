@@ -81,7 +81,7 @@ has_git = { enable_if = "command -v git" }
 name = "Git Personal Email"
 check = "[ $(git config --global --get user.email) = \"personal@icloud.com\" ]"
 install = """#!/bin/bash
-git config --global user.name \"Definitly Myname\"
+git config --global user.name \"Definitely Myname\"
 git config --global user.email \"personal@icloud.com\"
 git config --global user.signingkey \"ssh-ed25519 AAAAC3...\"
 """
@@ -91,7 +91,7 @@ requires = ["+personal", "+has_git"]
 name = "Git Work Email"
 check = "[ $(git config --global --get user.email) = \"me@work.com\" ]"
 install = """#!/bin/bash
-git config --global user.name \"Definitly Myname\"
+git config --global user.name \"Definitely Myname\"
 git config --global user.email \"me@work.com\"
 git config --global user.signingkey \"ssh-ed25519 AAAAC3...\"
 """
